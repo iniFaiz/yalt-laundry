@@ -1,0 +1,22 @@
+Verifikasi diagram YALT — 10 September 2026
+
+Acuan: AGENTS.md dan arahan terbaru pengguna (empat status).
+Alur final: diterima → dicuci → siap_diambil → diambil.
+Kedua ekspor draw.io Desktop dengan --disable-gpu: exit code 0.
+
+ERD: 5 tabel, 5 relasi, 5 PK, 5 FK, 3 UK; kardinalitas wajib/opsional sesuai rancangan.
+erd.drawio: XML valid; ID unik; parent dan ujung konektor valid; setiap edge memiliki geometri.
+PNG: 2368 x 1861; XML tertanam identik dengan sumber (normalisasi akhir baris).
+SHA256 sumber: 9ba44f68d3303ffd13413464f20a305bdc62d7aa2ea1ecac1ad5afa9f0b76404
+SHA256 PNG: dd8baa7f3de2a90a8ea724ed8953efac5a91efcdf4a0af2270545c41306b5fec
+
+Use case: 2 aktor, 13 use case, 15 asosiasi; aktor di luar batas sistem dan akses peran sesuai.
+usecase.drawio: XML valid; ID unik; parent dan ujung konektor valid; setiap edge memiliki geometri.
+PNG: 1874 x 1825; XML tertanam identik dengan sumber (normalisasi akhir baris).
+SHA256 sumber: 88fd85ac91061f94dff18bba15ff270bba87ea54e928a0b6bd1204eec8a1f766
+SHA256 PNG: b0c25f203e238ea4339d3198f8cf673af5f67acc8caaa05f558339fd61d2fc88
+
+Pemeriksaan visual: kedua PNG terbaru dibuka dan diperiksa; teks terbaca dan tidak terpotong; konektor tidak menutupi tabel/oval.
+Dokumentasi dan AGENTS.md konsisten dengan empat status.
+Verifikasi hanya mencakup rancangan diagram, struktur berkas, dan hasil render.
+Backend belum tersedia; Flutter/API/Supabase tidak diuji dalam perubahan diagram ini.
