@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'service_screen.dart';
 import 'order_entry_screen.dart';
+import 'order_monitoring_screen.dart';
 
 class AdminDashboard extends StatefulWidget {
   const AdminDashboard({super.key});
@@ -16,6 +17,7 @@ class _AdminDashboardState extends State<AdminDashboard> {
   // daftar halamannya
   final List<Widget> _pages = [
     OrderEntryScreen(),
+    OrderMonitoringScreen(),
     ServiceScreen(),
   ];
 
@@ -36,11 +38,17 @@ class _AdminDashboardState extends State<AdminDashboard> {
             icon: Icon(Icons.point_of_sale_outlined),
             label: 'Kasir POS',
           ),
+                    NavigationDestination(
+            icon: Icon(Icons.track_changes_outlined),
+            selectedIcon: Icon(Icons.track_changes),
+            label: 'Monitoring',
+          ),
           NavigationDestination(
             icon: Icon(Icons.local_laundry_service_outlined),
             selectedIcon: Icon(Icons.local_laundry_service),
             label: 'Layanan',
           ),
+          
         ],
       ),
     );

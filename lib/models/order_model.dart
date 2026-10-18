@@ -5,7 +5,8 @@ class OrderModel {
   final double weight;
   final double pricePerKgSnapshot;
   final double totalPrice;
-  final String status; // 'diterima', 'dicuci', 'siap_diambil', 'diambil'
+  String status; // 'diterima', 'dicuci', 'siap_diambil', 'diambil'
+  final String pickupToken; // unique token qr
   final DateTime createdAt;
 
   OrderModel({
@@ -16,30 +17,44 @@ class OrderModel {
     required this.pricePerKgSnapshot,
     required this.totalPrice,
     required this.status,
+    required this.pickupToken,
     required this.createdAt,
   });
 
-  // DATA DUMMY
+  // data dummy
   static List<OrderModel> dummyOrders = [
     OrderModel(
       id: 'ORD-001',
-      customerName: 'Budi Santoso',
+      customerName: 'Prabowo',
       serviceName: 'Cuci Setrika',
       weight: 3.0,
       pricePerKgSnapshot: 8000,
       totalPrice: 24000,
       status: 'dicuci',
-      createdAt: DateTime.now().subtract(const Duration(hours: 2)),
+      pickupToken: '000324',
+      createdAt: DateTime.now().subtract(const Duration(hours: 3)),
     ),
     OrderModel(
       id: 'ORD-002',
-      customerName: 'Siti Rahma',
+      customerName: 'Jokowi',
       serviceName: 'Cuci Kering',
       weight: 2.0,
       pricePerKgSnapshot: 6000,
       totalPrice: 12000,
-      status: 'diterima',
-      createdAt: DateTime.now().subtract(const Duration(minutes: 30)),
+      status: 'siap_diambil', // Siap discan oleh admin!
+      pickupToken: '000234',
+      createdAt: DateTime.now().subtract(const Duration(hours: 5)),
+    ),
+    OrderModel(
+      id: 'ORD-003',
+      customerName: 'Reezqi Goy',
+      serviceName: 'Cuci Setrika',
+      weight: 4.0,
+      pricePerKgSnapshot: 8000,
+      totalPrice: 32000,
+      status: 'diambil', // Sudah selesai
+      pickupToken: '000345',
+      createdAt: DateTime.now().subtract(const Duration(days: 1)),
     ),
   ];
 }

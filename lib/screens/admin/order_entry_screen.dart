@@ -53,13 +53,14 @@ void _submitOrder() {
   }
   // INSTANSIASI DARI INPUT KE ORDERMODEL
   final newOrder = OrderModel(
-    id: 'ORD-${DateTime.now().millisecondsSinceEpoch.toString().substring(8)}', // ID unik singkat
+    id: 'ORD-${DateTime.now().millisecondsSinceEpoch.toString().substring(8)}',
     customerName: customer,
     serviceName: _selectedService!.name,
     weight: _weight,
-    pricePerKgSnapshot: _selectedService!.pricePerKG, // Simpan snapshot harga
+    pricePerKgSnapshot: _selectedService!.pricePerKG,
     totalPrice: _totalPrice,
-    status: 'diterima', // Status awal sesuai SOP laundry
+    status: 'diterima',
+    pickupToken: 'QR-${DateTime.now().millisecondsSinceEpoch.toString().substring(8)}',
     createdAt: DateTime.now(),
   );
   // SIMPAN KE LIST DUMMY & REFRESH TAMPILAN
