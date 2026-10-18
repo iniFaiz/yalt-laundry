@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'admin/admin_dashboard.dart'; 
 
 class HomeScreen extends StatelessWidget {
   final String role;
@@ -10,7 +11,17 @@ class HomeScreen extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    // if admin go admin
+    if (role == 'Admin') {
+      return const AdminDashboard();
+    }
+
+    // uiser
     return Scaffold(
+      appBar: AppBar(
+        title: const Text('Beranda Pelanggan'),
+        centerTitle: true,
+      ),
       body: Center(
         child: Text(
           'Kamu adalah $role',
