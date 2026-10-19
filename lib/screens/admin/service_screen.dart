@@ -16,6 +16,24 @@ class _ServiceScreenState extends State<ServiceScreen> {
     ServiceModel(id: '3', name: 'Setrika Saja', pricePerKG: 5000, isActive: true),
   ];
 
+  bool _isLoading = false;
+
+  // inisialisasi awal saat halaman layanan dibuka (lifecycle on start)
+  @override
+  void initState() {
+    super.initState();
+    _loadServices();
+  }
+
+  // simulasi memuat data master layanan secara asinkron
+  Future<void> _loadServices() async {
+    setState(() => _isLoading = true);
+    await Future.delayed(const Duration(milliseconds: 400));
+    if (mounted) {
+      setState(() => _isLoading = false);
+    }
+  }
+
   // controller untuk dialog tambah layanan
   final TextEditingController _nameController = TextEditingController();
   final TextEditingController _priceController = TextEditingController();
@@ -103,38 +121,41 @@ class _ServiceScreenState extends State<ServiceScreen> {
         label: const Text('Tambah Layanan'),
       ),
       // ListView untuk menampilkan kumpulan daftar layanan
-      body: ListView.builder(
-        padding: const EdgeInsets.all(16),
-        itemCount: _services.length,
-        itemBuilder: (context, index) {
-          final service = _services[index];
-          return Card(
-            margin: const EdgeInsets.only(bottom: 12),
-            child: ListTile(
-              leading: CircleAvatar(
-                child: Text('${index + 1}'),
-              ),
-              title: Text(
-                service.name,
-                style: TextStyle(
-                  fontWeight: FontWeight.bold,
-                  decoration: service.isActive ? null : TextDecoration.lineThrough,
-                ),
-              ),
-              subtitle: Text('Rp ${service.pricePerKG.toStringAsFixed(0)} / kg'),
-              trailing: Switch(
-                value: service.isActive,
-                onChanged: (bool val) {
-                  // ubah status aktif/nonaktif layanan tanpa menghapus data
-                  setState(() {
-                    service.isActive = val;
-                  });
-                },
-              ),
+      body: _isLoading
+          ? const Center(child: CircularProgressIndicator())
+          : ListView.builder(
+              padding: const EdgeInsets.all(16),
+              itemCount: _services.length,
+              itemBuilder: (context, index) {
+                final service = _services[index];
+                return Card(
+                  margin: const EdgeInsets.only(bottom: 12),
+                  child: ListTile(
+                    leading: CircleAvatar(
+                      child: Text('${index + 1}'),
+                    ),
+                    title: Text(
+                      service.name,
+                      style: TextStyle(
+                        fontWeight: FontWeight.bold,
+                        decoration: service.isActive ? null : TextDecoration.lineThrough,
+                      ),
+                    ),
+                    // menggunakan getter formattedPrice dari model
+                    subtitle: Text(service.formattedPrice),
+                    trailing: Switch(
+                      value: service.isActive,
+                      onChanged: (bool val) {
+                        // ubah status aktif/nonaktif layanan tanpa menghapus data
+                        setState(() {
+                          service.isActive = val;
+                        });
+                      },
+                    ),
+                  ),
+                );
+              },
             ),
-          );
-        },
-      ),
     );
   }
 }

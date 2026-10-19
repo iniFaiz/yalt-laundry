@@ -26,6 +26,10 @@ class OrderDetailScreen extends StatelessWidget {
   Widget build(BuildContext context) {
     final currentStep = _getCurrentStep(order.status);
 
+    // menghitung ukuran responsif elemen layar dengan mediaquery
+    final screenWidth = MediaQuery.of(context).size.width;
+    final qrBoxSize = (screenWidth * 0.48).clamp(160.0, 220.0);
+
     return Scaffold(
       appBar: AppBar(
         title: Text('Detail ${order.id}'),
@@ -62,22 +66,23 @@ class OrderDetailScreen extends StatelessWidget {
                       ),
                       const SizedBox(height: 6),
                       Text(
-                        order.status == 'siap_diambil'
+                        // memanfaatkan getter isReadyForPickup dari order model
+                        order.isReadyForPickup
                             ? 'Tunjukkan QR ini ke kasir saat mengambil pakaian'
                             : 'QR akan aktif diverifikasi saat cucian siap diambil',
                         textAlign: TextAlign.center,
                         style: TextStyle(
                           fontSize: 12,
-                          color: order.status == 'siap_diambil' ? Colors.green : Colors.grey,
-                          fontWeight: order.status == 'siap_diambil' ? FontWeight.bold : FontWeight.normal,
+                          color: order.isReadyForPickup ? Colors.green : Colors.grey,
+                          fontWeight: order.isReadyForPickup ? FontWeight.bold : FontWeight.normal,
                         ),
                       ),
                       const SizedBox(height: 16),
                       
-                      // QR Image via Image.network
+                      // QR Image via Image.network dengan ukuran responsif
                       Container(
-                        width: 180,
-                        height: 180,
+                        width: qrBoxSize,
+                        height: qrBoxSize,
                         padding: const EdgeInsets.all(10),
                         decoration: BoxDecoration(
                           border: Border.all(color: Colors.grey.shade300),
@@ -127,12 +132,14 @@ class OrderDetailScreen extends StatelessWidget {
             const SizedBox(height: 12),
             _buildReceiptRow('Nama Pelanggan', order.customerName),
             _buildReceiptRow('Layanan', order.serviceName),
-            _buildReceiptRow('Tarif per Kg', 'Rp ${order.pricePerKgSnapshot.toStringAsFixed(0)}'),
-            _buildReceiptRow('Berat Cucian', '${order.weight} kg'),
+            // menggunakan getter formattedPricePerKg dan formattedWeight
+            _buildReceiptRow('Tarif per Kg', order.formattedPricePerKg),
+            _buildReceiptRow('Berat Cucian', order.formattedWeight),
             const Divider(height: 24),
+            // menggunakan getter formattedTotalPrice
             _buildReceiptRow(
               'Total Bayar',
-              'Rp ${order.totalPrice.toStringAsFixed(0)}',
+              order.formattedTotalPrice,
               isBold: true,
               valueColor: const Color(0xFF007BFF),
             ),

@@ -11,6 +11,32 @@ class OrderMonitoringScreen extends StatefulWidget {
 class _OrderMonitoringScreenState extends State<OrderMonitoringScreen> {
   // simulasi Scanner input token QR
   final TextEditingController _qrInputController = TextEditingController();
+  bool _isLoading = true; // status loading data awal
+
+  // inisialisasi awal saat halaman dibuka (lifecycle on start)
+  @override
+  void initState() {
+    super.initState();
+    _fetchMonitoringData();
+  }
+
+  // fungsi asinkron memuat data monitoring pesanan
+  Future<void> _fetchMonitoringData() async {
+    await Future.delayed(const Duration(milliseconds: 500));
+    if (mounted) {
+      setState(() {
+        _isLoading = false;
+      });
+    }
+  }
+
+  // fungsi refresh asinkron
+  Future<void> _handleRefresh() async {
+    await Future.delayed(const Duration(milliseconds: 600));
+    if (mounted) {
+      setState(() {});
+    }
+  }
 
   // Helper warna badge status
   Color _getStatusColor(String status) {
@@ -28,8 +54,12 @@ class _OrderMonitoringScreenState extends State<OrderMonitoringScreen> {
     }
   }
 
-  // PEMBARUAN STATUS
-  void _advanceOrderStatus(OrderModel order) {
+  // PEMBARUAN STATUS SECARA ASINKRON
+  Future<void> _advanceOrderStatus(OrderModel order) async {
+    // simulasi jeda simpan status ke database
+    await Future.delayed(const Duration(milliseconds: 400));
+    if (!mounted) return;
+
     setState(() {
       if (order.status == 'diterima') {
         order.status = 'dicuci';
@@ -45,10 +75,37 @@ class _OrderMonitoringScreenState extends State<OrderMonitoringScreen> {
     });
   }
 
-  // 2. LOGIKA VERIFIKASI SCANNER QR PENGAMBILAN
-  void _verifyQRPickup(String token) {
+  // LOGIKA VERIFIKASI SCANNER QR PENGAMBILAN SECARA ASINKRON
+  Future<void> _verifyQRPickup(String token) async {
     token = token.trim();
     if (token.isEmpty) return;
+
+    // tampilkan dialog loading proses verifikasi
+    showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (_) => const Center(
+        child: Card(
+          child: Padding(
+            padding: EdgeInsets.all(20.0),
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                CircularProgressIndicator(),
+                SizedBox(width: 16),
+                Text('Memverifikasi QR Token...'),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+
+    // simulasi request validasi token ke server/database
+    await Future.delayed(const Duration(milliseconds: 800));
+
+    if (!mounted) return;
+    Navigator.pop(context); // tutup loading dialog
 
     // Cari pesanan berdasarkan token QR
     final orderIndex = OrderModel.dummyOrders.indexWhere((o) => o.pickupToken == token);
@@ -65,13 +122,13 @@ class _OrderMonitoringScreenState extends State<OrderMonitoringScreen> {
     final order = OrderModel.dummyOrders[orderIndex];
 
     // Cek kondisi status
-    if (order.status == 'diambil') {
+    if (order.isCollected) {
       _showScanResultDialog(
         success: false,
         title: 'QR Sudah Hangus!',
         message: 'Cucian atas nama ${order.customerName} sudah pernah diambil sebelumnya.',
       );
-    } else if (order.status != 'siap_diambil') {
+    } else if (!order.isReadyForPickup) {
       _showScanResultDialog(
         success: false,
         title: 'Cucian Belum Siap!',
@@ -85,7 +142,7 @@ class _OrderMonitoringScreenState extends State<OrderMonitoringScreen> {
       _showScanResultDialog(
         success: true,
         title: 'Pengambilan Berhasil!',
-        message: 'Cucian untuk ${order.customerName} (${order.serviceName} - ${order.weight} kg) berhasil diserahkan!',
+        message: 'Cucian untuk ${order.customerName} (${order.serviceName} - ${order.formattedWeight}) berhasil diserahkan!',
       );
     }
   }
@@ -200,51 +257,59 @@ class _OrderMonitoringScreenState extends State<OrderMonitoringScreen> {
           icon: const Icon(Icons.qr_code_scanner),
           label: const Text('Scan QR Pickup'),
         ),
-        body: Column(
-          children: [
-            // KARTU LAPORAN
-            Padding(
-              padding: const EdgeInsets.all(12.0),
-              child: Card(
-                color: Colors.blue.shade50,
-                elevation: 0,
-                shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(12),
-                  side: BorderSide(color: Colors.blue.shade200),
-                ),
-                child: Padding(
-                  padding: const EdgeInsets.all(16.0),
-                  child: Row(
-                    mainAxisAlignment: MainAxisAlignment.spaceAround,
-                    children: [
-                      _buildReportStat('Aktif', '$activeOrders', Colors.orange.shade800),
-                      _buildReportStat('Selesai', '$completedOrders', Colors.green.shade800),
-                      _buildReportStat('Omzet Selesai', 'Rp ${totalRevenue.toStringAsFixed(0)}', Colors.blue.shade900),
-                    ],
-                  ),
-                ),
-              ),
-            ),
-
-            // ISI TAB VIEW: PESANAN AKTIF VS RIWAYAT SELESAI dummy only
-            Expanded(
-              child: TabBarView(
+        body: _isLoading
+            ? const Center(child: CircularProgressIndicator())
+            : Column(
                 children: [
-                  // cucian Aktif
-                  _buildOrderList(
-                    OrderModel.dummyOrders.where((o) => o.status != 'diambil').toList(),
-                    isActiveList: true,
+                  // KARTU LAPORAN
+                  Padding(
+                    padding: const EdgeInsets.all(12.0),
+                    child: Card(
+                      color: Colors.blue.shade50,
+                      elevation: 0,
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(12),
+                        side: BorderSide(color: Colors.blue.shade200),
+                      ),
+                      child: Padding(
+                        padding: const EdgeInsets.all(16.0),
+                        child: Row(
+                          mainAxisAlignment: MainAxisAlignment.spaceAround,
+                          children: [
+                            _buildReportStat('Aktif', '$activeOrders', Colors.orange.shade800),
+                            _buildReportStat('Selesai', '$completedOrders', Colors.green.shade800),
+                            _buildReportStat('Omzet Selesai', 'Rp ${totalRevenue.toStringAsFixed(0)}', Colors.blue.shade900),
+                          ],
+                        ),
+                      ),
+                    ),
                   ),
-                  // riwayat Selesai
-                  _buildOrderList(
-                    OrderModel.dummyOrders.where((o) => o.status == 'diambil').toList(),
-                    isActiveList: false,
+
+                  // ISI TAB VIEW: PESANAN AKTIF VS RIWAYAT SELESAI
+                  Expanded(
+                    child: TabBarView(
+                      children: [
+                        // cucian Aktif
+                        RefreshIndicator(
+                          onRefresh: _handleRefresh,
+                          child: _buildOrderList(
+                            OrderModel.dummyOrders.where((o) => o.status != 'diambil').toList(),
+                            isActiveList: true,
+                          ),
+                        ),
+                        // riwayat Selesai
+                        RefreshIndicator(
+                          onRefresh: _handleRefresh,
+                          child: _buildOrderList(
+                            OrderModel.dummyOrders.where((o) => o.status == 'diambil').toList(),
+                            isActiveList: false,
+                          ),
+                        ),
+                      ],
+                    ),
                   ),
                 ],
               ),
-            ),
-          ],
-        ),
       ),
     );
   }
@@ -268,6 +333,7 @@ class _OrderMonitoringScreenState extends State<OrderMonitoringScreen> {
     }
 
     return ListView.builder(
+      physics: const AlwaysScrollableScrollPhysics(),
       padding: const EdgeInsets.all(12),
       itemCount: orders.length,
       itemBuilder: (context, index) {
@@ -304,7 +370,8 @@ class _OrderMonitoringScreenState extends State<OrderMonitoringScreen> {
                   ],
                 ),
                 const SizedBox(height: 6),
-                Text('${order.serviceName} • ${order.weight} kg • Total: Rp ${order.totalPrice.toStringAsFixed(0)}'),
+                // menggunakan getter model formattedWeight dan formattedTotalPrice
+                Text('${order.serviceName} • ${order.formattedWeight} • Total: ${order.formattedTotalPrice}'),
                 Text('Token QR: ${order.pickupToken}', style: const TextStyle(fontSize: 12, color: Colors.grey)),
                 
                 // tombol Update Status
@@ -326,7 +393,7 @@ class _OrderMonitoringScreenState extends State<OrderMonitoringScreen> {
                           icon: const Icon(Icons.check_circle_outline, size: 16),
                           label: const Text('Tandai Siap Diambil'),
                         ),
-                      if (order.status == 'siap_diambil')
+                      if (order.isReadyForPickup)
                         const Text(
                           'Menunggu Scan QR Pelanggan',
                           style: TextStyle(fontStyle: FontStyle.italic, color: Colors.green),

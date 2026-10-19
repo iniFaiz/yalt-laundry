@@ -1,8 +1,6 @@
 import 'package:flutter/material.dart';
 import '../../models/order_model.dart';
 import '../../models/customer_model.dart';
-import '../login_screen.dart';
-import 'order_detail_screen.dart';
 
 class CustomerHomeScreen extends StatefulWidget {
   final CustomerModel customer;
@@ -19,8 +17,36 @@ class CustomerHomeScreen extends StatefulWidget {
 class _CustomerHomeScreenState extends State<CustomerHomeScreen> {
   // index untuk bottom navbar
   int _currentIndex = 0;
+  bool _isLoading = true; // status loading data awal
 
-  //  logout dialog
+  // inisialisasi awal saat widget pertama kali dimuat (lifecycle on start)
+  @override
+  void initState() {
+    super.initState();
+    _loadInitialOrders();
+  }
+
+  // fungsi asinkron memuat data awal cucian pelanggan
+  Future<void> _loadInitialOrders() async {
+    // simulasi jeda asinkron load data dari server
+    await Future.delayed(const Duration(milliseconds: 600));
+    if (mounted) {
+      setState(() {
+        _isLoading = false;
+      });
+    }
+  }
+
+  // fungsi asinkron untuk refresh data saat ditarik ke bawah
+  Future<void> _handleRefresh() async {
+    // simulasi pembaruan data terbaru
+    await Future.delayed(const Duration(milliseconds: 700));
+    if (mounted) {
+      setState(() {});
+    }
+  }
+
+  // dialog konfirmasi keluar akun
   void _confirmLogout() {
     showDialog(
       context: context,
@@ -41,8 +67,9 @@ class _CustomerHomeScreenState extends State<CustomerHomeScreen> {
             ),
             onPressed: () {
               Navigator.pop(ctx);
-              Navigator.of(context).pushAndRemoveUntil(
-                MaterialPageRoute(builder: (_) => const LoginScreen()),
+              // kembali ke login pakai named route dan hapus tumpukan halaman
+              Navigator.of(context).pushNamedAndRemoveUntil(
+                '/',
                 (route) => false,
               );
             },
@@ -100,10 +127,15 @@ class _CustomerHomeScreenState extends State<CustomerHomeScreen> {
         ],
       ),
 
-      // tampilkan halaman sesuai tab yang dipilih
-      body: _currentIndex == 0
-          ? _buildHomeTab(activeOrders)
-          : _buildHistoryTab(pastOrders),
+      // tampilkan loading indicator jika proses asinkron awal masih berjalan
+      body: _isLoading
+          ? const Center(child: CircularProgressIndicator())
+          : RefreshIndicator(
+              onRefresh: _handleRefresh,
+              child: _currentIndex == 0
+                  ? _buildHomeTab(activeOrders)
+                  : _buildHistoryTab(pastOrders),
+            ),
 
       // bottom navigation bar material 3
       bottomNavigationBar: Container(
@@ -146,6 +178,7 @@ class _CustomerHomeScreenState extends State<CustomerHomeScreen> {
   // tab home
   Widget _buildHomeTab(List<OrderModel> activeOrders) {
     return ListView(
+      physics: const AlwaysScrollableScrollPhysics(), // agar RefreshIndicator selalu bisa ditarik
       padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 16),
       children: [
         // BANNER SAMBUTAN
@@ -175,6 +208,16 @@ class _CustomerHomeScreenState extends State<CustomerHomeScreen> {
           ),
         ),
 
+        const SizedBox(height: 22),
+
+        // SEKSI KATALOG LAYANAN DENGAN GRIDVIEW
+        const Text(
+          'Paket Layanan Tersedia',
+          style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: Colors.black87),
+        ),
+        const SizedBox(height: 10),
+        _buildServiceGrid(),
+
         const SizedBox(height: 24),
 
         // JUDUL SECTION CUCIAN AKTIF
@@ -201,12 +244,77 @@ class _CustomerHomeScreenState extends State<CustomerHomeScreen> {
 
         const SizedBox(height: 12),
 
-        // daftar kartu pesanan aktif
+        // daftar kartu pesanan aktif (ListView)
         if (activeOrders.isEmpty)
           _buildEmptyState('Tidak ada cucian aktif saat ini.', Icons.dry_cleaning_outlined)
         else
           ...activeOrders.map((order) => _buildModernOrderCard(order, isActive: true)),
       ],
+    );
+  }
+
+  // widget gridview untuk daftar paket layanan 2 kolom
+  Widget _buildServiceGrid() {
+    final services = [
+      {'title': 'Cuci Kering', 'price': 'Rp 6.000 / kg', 'icon': Icons.local_laundry_service},
+      {'title': 'Cuci Setrika', 'price': 'Rp 8.000 / kg', 'icon': Icons.iron},
+      {'title': 'Setrika Saja', 'price': 'Rp 5.000 / kg', 'icon': Icons.checkroom},
+      {'title': 'Cuci Kilat', 'price': 'Rp 12.000 / kg', 'icon': Icons.flash_on},
+    ];
+
+    return GridView.builder(
+      shrinkWrap: true,
+      physics: const NeverScrollableScrollPhysics(), // menyatu dengan scroll ListView
+      itemCount: services.length,
+      gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+        crossAxisCount: 2, // 2 kolom sejajar
+        crossAxisSpacing: 10,
+        mainAxisSpacing: 10,
+        childAspectRatio: 2.1, // proporsi kartu kotak memanjang
+      ),
+      itemBuilder: (context, index) {
+        final item = services[index];
+        return Container(
+          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+          decoration: BoxDecoration(
+            color: Colors.white,
+            borderRadius: BorderRadius.circular(12),
+            border: Border.all(color: Colors.grey.shade200),
+          ),
+          child: Row(
+            children: [
+              Container(
+                padding: const EdgeInsets.all(8),
+                decoration: BoxDecoration(
+                  color: const Color(0xFF007BFF).withOpacity(0.1),
+                  borderRadius: BorderRadius.circular(8),
+                ),
+                child: Icon(item['icon'] as IconData, color: const Color(0xFF007BFF), size: 18),
+              ),
+              const SizedBox(width: 8),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    Text(
+                      item['title'] as String,
+                      style: const TextStyle(fontSize: 12, fontWeight: FontWeight.bold),
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                    const SizedBox(height: 2),
+                    Text(
+                      item['price'] as String,
+                      style: const TextStyle(fontSize: 10, color: Colors.grey),
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+        );
+      },
     );
   }
 
@@ -217,6 +325,7 @@ class _CustomerHomeScreenState extends State<CustomerHomeScreen> {
     }
 
     return ListView(
+      physics: const AlwaysScrollableScrollPhysics(),
       padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 16),
       children: [
         const Text(
@@ -231,7 +340,6 @@ class _CustomerHomeScreenState extends State<CustomerHomeScreen> {
 
   // kartu pesanan
   Widget _buildModernOrderCard(OrderModel order, {required bool isActive}) {
-    // Pewarnaan status yang lembut & elegan
     Color statusBg;
     Color statusTextColor;
     String statusLabel;
@@ -270,10 +378,11 @@ class _CustomerHomeScreenState extends State<CustomerHomeScreen> {
         child: InkWell(
           borderRadius: BorderRadius.circular(16),
           onTap: () {
-            // pindah ke detail & tracking
-            Navigator.push(
+            // pindah ke detail pakai named route membawa argumen objek order
+            Navigator.pushNamed(
               context,
-              MaterialPageRoute(builder: (_) => OrderDetailScreen(order: order)),
+              '/order-detail',
+              arguments: order,
             );
           },
           child: Padding(
@@ -305,7 +414,7 @@ class _CustomerHomeScreenState extends State<CustomerHomeScreen> {
 
                 const SizedBox(height: 12),
 
-                // baris layanan dan berat
+                // baris layanan dan berat memakai getter model
                 Row(
                   children: [
                     Container(
@@ -325,7 +434,7 @@ class _CustomerHomeScreenState extends State<CustomerHomeScreen> {
                           style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w600),
                         ),
                         Text(
-                          '${order.weight} kg',
+                          order.formattedWeight,
                           style: const TextStyle(fontSize: 12, color: Colors.grey),
                         ),
                       ],
@@ -338,7 +447,7 @@ class _CustomerHomeScreenState extends State<CustomerHomeScreen> {
                   child: Divider(height: 1, color: Color(0xFFEEEEEE)),
                 ),
 
-                // baris bawah: total biaya dan tombol detail
+                // baris bawah: total biaya memakai getter dan tombol detail
                 Row(
                   mainAxisAlignment: MainAxisAlignment.spaceBetween,
                   children: [
@@ -347,7 +456,7 @@ class _CustomerHomeScreenState extends State<CustomerHomeScreen> {
                       children: [
                         const Text('Total Tagihan', style: TextStyle(fontSize: 11, color: Colors.grey)),
                         Text(
-                          'Rp ${order.totalPrice.toStringAsFixed(0)}',
+                          order.formattedTotalPrice,
                           style: const TextStyle(
                             fontSize: 15,
                             fontWeight: FontWeight.bold,

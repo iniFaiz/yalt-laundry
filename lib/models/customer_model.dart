@@ -13,6 +13,31 @@ class CustomerModel {
     this.role = 'Customer',
   });
 
+  // getter cek role admin
+  bool get isAdmin => role == 'Admin';
+
+  // konversi dari map json ke object model
+  factory CustomerModel.fromJson(Map<String, dynamic> json) {
+    return CustomerModel(
+      id: json['id'] as String,
+      name: json['name'] as String,
+      phone: json['phone'] as String,
+      password: json['password'] as String? ?? 'ayamgoreng',
+      role: json['role'] as String? ?? 'Customer',
+    );
+  }
+
+  // konversi dari object model ke map json
+  Map<String, dynamic> toJson() {
+    return {
+      'id': id,
+      'name': name,
+      'phone': phone,
+      'password': password,
+      'role': role,
+    };
+  }
+
   // DAFTAR AKUN YANG TERDAFTAR (BISA LOGIN DENGAN NO HP & PASSWORD 'ayamgoreng')
   static List<CustomerModel> dummyCustomers = [
     CustomerModel(

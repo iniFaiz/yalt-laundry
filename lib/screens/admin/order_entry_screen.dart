@@ -12,9 +12,11 @@ class OrderEntryScreen extends StatefulWidget {
 
 class _OrderEntryScreenState extends State<OrderEntryScreen> {
   CustomerModel? _selectedCustomer;
+  bool _isSubmitting = false; // status loading saat proses simpan asinkron
 
   final _newCustomerNameController = TextEditingController();
   final _newCustomerPhoneController = TextEditingController();
+  final _weightController = TextEditingController();
 
   // data dummy daftar layanan yang tersedia untuk dipilih di dropdown
   final List<ServiceModel> _availableServices = [
@@ -29,65 +31,65 @@ class _OrderEntryScreenState extends State<OrderEntryScreen> {
 
   // POPUP REGISTRASI PELANGGAN BARU
   void _showRegisterCustomerDialog() {
-  _newCustomerNameController.clear();
-  _newCustomerPhoneController.clear();
-  showDialog(
-    context: context,
-    builder: (ctx) => AlertDialog(
-      title: const Text('Registrasi Pelanggan Baru'),
-      content: Column(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          TextField(
-            controller: _newCustomerNameController,
-            decoration: const InputDecoration(
-              labelText: 'Nama Lengkap',
-              prefixIcon: Icon(Icons.person),
+    _newCustomerNameController.clear();
+    _newCustomerPhoneController.clear();
+    showDialog(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('Registrasi Pelanggan Baru'),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            TextField(
+              controller: _newCustomerNameController,
+              decoration: const InputDecoration(
+                labelText: 'Nama Lengkap',
+                prefixIcon: Icon(Icons.person),
+              ),
             ),
-          ),
-          const SizedBox(height: 12),
-          TextField(
-            controller: _newCustomerPhoneController,
-            keyboardType: TextInputType.phone,
-            decoration: const InputDecoration(
-              labelText: 'Nomor HP / WhatsApp',
-              prefixIcon: Icon(Icons.phone),
-              hintText: '08...',
+            const SizedBox(height: 12),
+            TextField(
+              controller: _newCustomerPhoneController,
+              keyboardType: TextInputType.phone,
+              decoration: const InputDecoration(
+                labelText: 'Nomor HP / WhatsApp',
+                prefixIcon: Icon(Icons.phone),
+                hintText: '08...',
+              ),
             ),
+          ],
+        ),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('Batal')),
+          ElevatedButton(
+            onPressed: () {
+              final name = _newCustomerNameController.text.trim();
+              final phone = _newCustomerPhoneController.text.trim();
+              if (name.isNotEmpty && phone.isNotEmpty) {
+                // 1. Buat pelanggan baru
+                final newCust = CustomerModel(
+                  id: 'CUST-${DateTime.now().millisecondsSinceEpoch.toString().substring(8)}',
+                  name: name,
+                  phone: phone,
+                  password: 'ayamgoreng', // Password default agar mudah demo
+                );
+                // 2. Simpan ke daftar pelanggan dan otomatis pilih pelanggan tersebut
+                setState(() {
+                  CustomerModel.dummyCustomers.add(newCust);
+                  _selectedCustomer = newCust;
+                });
+                Navigator.pop(ctx);
+                ScaffoldMessenger.of(context).showSnackBar(
+                  SnackBar(backgroundColor: Colors.green, content: Text('Pelanggan $name berhasil didaftarkan!')),
+                );
+              }
+            },
+            child: const Text('Daftarkan'),
           ),
         ],
       ),
-      actions: [
-        TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('Batal')),
-        ElevatedButton(
-          onPressed: () {
-            final name = _newCustomerNameController.text.trim();
-            final phone = _newCustomerPhoneController.text.trim();
-            if (name.isNotEmpty && phone.isNotEmpty) {
-              // 1. Buat pelanggan baru
-              final newCust = CustomerModel(
-                id: 'CUST-${DateTime.now().millisecondsSinceEpoch.toString().substring(8)}',
-                name: name,
-                phone: phone,
-                password: 'ayamgoreng', // Password default agar mudah demo
-              );
-              // 2. Simpan ke daftar pelanggan dan otomatis pilih pelanggan tersebut
-              setState(() {
-                CustomerModel.dummyCustomers.add(newCust);
-                _selectedCustomer = newCust;
-              });
-              Navigator.pop(ctx);
-              ScaffoldMessenger.of(context).showSnackBar(
-                SnackBar(backgroundColor: Colors.green, content: Text('Pelanggan $name berhasil didaftarkan!')),
-              );
-            }
-          },
-          child: const Text('Daftarkan'),
-        ),
-      ],
-    ),
-  );
-}
+    );
+  }
 
   // hitung subtotal otomatis 
   void _calculateTotal() {
@@ -100,16 +102,24 @@ class _OrderEntryScreenState extends State<OrderEntryScreen> {
     });
   }
 
-  final _weightController = TextEditingController();
-
-  void _submitOrder() {
-    // validasi
+  // fungsi simpan transaksi pesanan secara asinkron
+  Future<void> _submitOrder() async {
+    // validasi form
     if (_selectedCustomer == null || _selectedService == null || _weight <= 0) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text('Pilih pelanggan, layanan, dan berat cucian!')),
       );
       return;
     }
+
+    setState(() {
+      _isSubmitting = true;
+    });
+
+    // simulasi request penyimpanan data transaksi ke database
+    await Future.delayed(const Duration(milliseconds: 600));
+
+    if (!mounted) return;
 
     // INSTANSIASI DARI INPUT KE ORDERMODEL
     final newOrder = OrderModel(
@@ -127,17 +137,16 @@ class _OrderEntryScreenState extends State<OrderEntryScreen> {
 
     // SIMPAN KE LIST DUMMY & REFRESH TAMPILAN
     setState(() {
-      OrderModel.dummyOrders.insert(0, newOrder); // insert(0, ...) agar pesanan baru muncul paling atas
-    });
-
-    // reset Form
-    _weightController.clear();
-    setState(() {
+      OrderModel.dummyOrders.insert(0, newOrder); // pesanan baru muncul paling atas
+      _isSubmitting = false;
+      // reset form input
       _selectedCustomer = null;
       _selectedService = null;
       _weight = 0.0;
       _totalPrice = 0.0;
     });
+
+    _weightController.clear();
 
     // feedback sukses ke admin
     ScaffoldMessenger.of(context).showSnackBar(
@@ -158,7 +167,7 @@ class _OrderEntryScreenState extends State<OrderEntryScreen> {
 
   @override
   Widget build(BuildContext context) {
-    // responsive width
+    // hitung ukuran responsif lebar layar dengan mediaquery
     final screenWidth = MediaQuery.of(context).size.width;
 
     return Scaffold(
@@ -217,7 +226,7 @@ class _OrderEntryScreenState extends State<OrderEntryScreen> {
               items: _availableServices.map((service) {
                 return DropdownMenuItem(
                   value: service,
-                  child: Text('${service.name} (Rp ${service.pricePerKG.toStringAsFixed(0)}/kg)'),
+                  child: Text('${service.name} (${service.formattedPrice})'),
                 );
               }).toList(),
               onChanged: (ServiceModel? newService) {
@@ -246,7 +255,7 @@ class _OrderEntryScreenState extends State<OrderEntryScreen> {
               ),
               onChanged: (value) {
                 _weight = double.tryParse(value) ?? 0.0;
-                _calculateTotal(); // calculate berat * harga
+                _calculateTotal(); // hitung berat * harga
               },
             ),
             const SizedBox(height: 28),
@@ -285,14 +294,23 @@ class _OrderEntryScreenState extends State<OrderEntryScreen> {
               width: double.infinity,
               height: 50,
               child: ElevatedButton.icon(
-                onPressed: _submitOrder,
+                onPressed: _isSubmitting ? null : _submitOrder,
                 style: ElevatedButton.styleFrom(
                   backgroundColor: const Color(0xFF007BFF),
                   foregroundColor: Colors.white,
                   shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
                 ),
-                icon: const Icon(Icons.receipt_long),
-                label: const Text('Buat Pesanan & Cetak Bukti', style: TextStyle(fontSize: 16)),
+                icon: _isSubmitting
+                    ? const SizedBox(
+                        width: 20,
+                        height: 20,
+                        child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white),
+                      )
+                    : const Icon(Icons.receipt_long),
+                label: Text(
+                  _isSubmitting ? 'Menyimpan Pesanan...' : 'Buat Pesanan & Cetak Bukti',
+                  style: const TextStyle(fontSize: 16),
+                ),
               ),
             ),
 
@@ -308,8 +326,8 @@ class _OrderEntryScreenState extends State<OrderEntryScreen> {
 
             // loop data dummy pesanan
             ListView.builder(
-              shrinkWrap: true, //agar tidak overflow di SingleChildScrollView
-              physics: const NeverScrollableScrollPhysics(), // agar ListView tidak bisa discroll sendiri
+              shrinkWrap: true, // agar tidak overflow di SingleChildScrollView
+              physics: const NeverScrollableScrollPhysics(), // agar ListView tidak scroll terpisah
               itemCount: OrderModel.dummyOrders.length,
               itemBuilder: (context, index) {
                 final order = OrderModel.dummyOrders[index];
@@ -324,9 +342,9 @@ class _OrderEntryScreenState extends State<OrderEntryScreen> {
                       order.customerName,
                       style: const TextStyle(fontWeight: FontWeight.bold),
                     ),
-                    subtitle: Text('${order.serviceName} • ${order.weight} kg (${order.status})'),
+                    subtitle: Text('${order.serviceName} • ${order.formattedWeight} (${order.status})'),
                     trailing: Text(
-                      'Rp ${order.totalPrice.toStringAsFixed(0)}',
+                      order.formattedTotalPrice,
                       style: const TextStyle(fontWeight: FontWeight.bold, color: Colors.blue),
                     ),
                   ),

@@ -1,5 +1,4 @@
 import 'package:flutter/material.dart';
-import '../login_screen.dart';
 import 'service_screen.dart';
 import 'order_entry_screen.dart';
 import 'order_monitoring_screen.dart';
@@ -10,6 +9,17 @@ class AdminDashboard extends StatefulWidget {
   @override
   State<AdminDashboard> createState() => _AdminDashboardState();
 }
+
+class _AdminDashboardState extends State<AdminDashboard> {
+  // var index tab aktif
+  int _currentIndex = 0;
+
+  // daftar halamannya
+  final List<Widget> _pages = [
+    const OrderEntryScreen(),
+    const OrderMonitoringScreen(),
+    const ServiceScreen(),
+  ];
 
   void _showLogoutDialog(BuildContext context) {
     showDialog(
@@ -29,9 +39,9 @@ class AdminDashboard extends StatefulWidget {
             ),
             onPressed: () {
               Navigator.pop(ctx);
-              // kembali ke Login & bersihkan semua riwayat halaman
-              Navigator.of(context).pushAndRemoveUntil(
-                MaterialPageRoute(builder: (_) => const LoginScreen()),
+              // kembali ke Login pakai named route & bersihkan riwayat halaman
+              Navigator.of(context).pushNamedAndRemoveUntil(
+                '/',
                 (route) => false,
               );
             },
@@ -41,16 +51,6 @@ class AdminDashboard extends StatefulWidget {
       ),
     );
   }
-class _AdminDashboardState extends State<AdminDashboard> {
-  // var index tab aktif
-  int _currentIndex = 0;
-
-  // daftar halamannya
-  final List<Widget> _pages = [
-    OrderEntryScreen(),
-    OrderMonitoringScreen(),
-    ServiceScreen(),
-  ];
 
   @override
   Widget build(BuildContext context) {
@@ -79,7 +79,7 @@ class _AdminDashboardState extends State<AdminDashboard> {
             icon: Icon(Icons.point_of_sale_outlined),
             label: 'Kasir POS',
           ),
-                    NavigationDestination(
+          NavigationDestination(
             icon: Icon(Icons.track_changes_outlined),
             selectedIcon: Icon(Icons.track_changes),
             label: 'Monitoring',
