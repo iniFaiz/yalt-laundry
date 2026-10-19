@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import '../widgets/app_logo.dart';
+import '../models/customer_model.dart';
 import 'home_screen.dart';
 
 class LoginScreen extends StatefulWidget {
@@ -10,7 +11,7 @@ class LoginScreen extends StatefulWidget {
 }
 
 class _LoginScreenState extends State<LoginScreen> {
-  final TextEditingController _emailController = TextEditingController();
+  final TextEditingController _phoneController = TextEditingController();
   final TextEditingController _passwordController = TextEditingController();
 
   bool _obscurePassword = true;
@@ -18,22 +19,22 @@ class _LoginScreenState extends State<LoginScreen> {
 
   @override
   void dispose() {
-    _emailController.dispose();
+    _phoneController.dispose();
     _passwordController.dispose();
     super.dispose();
   }
 
   void _handleLogin() {
-    final email = _emailController.text.trim();
+    final phone = _phoneController.text.trim();
     final password = _passwordController.text;
 
     setState(() {
       _errorMessage = null;
     });
 
-    if (email.isEmpty) {
+    if (phone.isEmpty) {
       setState(() {
-        _errorMessage = 'Email tidak boleh kosong';
+        _errorMessage = 'Nomor HP tidak boleh kosong';
       });
       return;
     }
@@ -45,21 +46,21 @@ class _LoginScreenState extends State<LoginScreen> {
       return;
     }
 
-    if (email == 'faiz@yalt.com' && password == 'ayamgoreng') {
+    // Cari user di daftar dummyCustomers
+    final userIndex = CustomerModel.dummyCustomers.indexWhere(
+      (u) => u.phone == phone && u.password == password,
+    );
+
+    if (userIndex != -1) {
+      final user = CustomerModel.dummyCustomers[userIndex];
       Navigator.of(context).pushReplacement(
         MaterialPageRoute(
-          builder: (_) => const HomeScreen(role: 'Admin'),
-        ),
-      );
-    } else if (email == 'faiz@gmail.com' && password == 'ayamgoreng') {
-      Navigator.of(context).pushReplacement(
-        MaterialPageRoute(
-          builder: (_) => const HomeScreen(role: 'User'),
+          builder: (_) => HomeScreen(currentUser: user),
         ),
       );
     } else {
       setState(() {
-        _errorMessage = 'Email atau password salah';
+        _errorMessage = 'Nomor HP atau password salah';
       });
     }
   }
@@ -80,7 +81,7 @@ class _LoginScreenState extends State<LoginScreen> {
               mainAxisAlignment: MainAxisAlignment.center,
               crossAxisAlignment: CrossAxisAlignment.center,
               children: [
-                // Top Header: Logo bulat (tanpa shadow/glow) & Teks "Yalt" font Roboto
+                // Top Header
                 const AppLogo(size: 110),
                 const SizedBox(height: 14),
                 const Text(
@@ -131,14 +132,14 @@ class _LoginScreenState extends State<LoginScreen> {
                   ),
                 ],
 
-                // Input Field: Email (Icon Email di kiri + input box)
+                // Input Field Nomor HP 
                 Row(
                   crossAxisAlignment: CrossAxisAlignment.center,
                   children: [
                     const SizedBox(
                       width: 28,
                       child: Icon(
-                        Icons.email_outlined,
+                        Icons.phone_outlined,
                         size: 22,
                         color: Color(0xFF111827),
                       ),
@@ -148,7 +149,7 @@ class _LoginScreenState extends State<LoginScreen> {
                       child: Container(
                         height: 48,
                         decoration: BoxDecoration(
-                          color: Colors.white,
+                           color: Colors.white,
                           borderRadius: BorderRadius.circular(8),
                           border: Border.all(
                             color: borderColor,
@@ -158,8 +159,8 @@ class _LoginScreenState extends State<LoginScreen> {
                         padding: const EdgeInsets.symmetric(horizontal: 14),
                         alignment: Alignment.centerLeft,
                         child: TextField(
-                          controller: _emailController,
-                          keyboardType: TextInputType.emailAddress,
+                          controller: _phoneController,
+                          keyboardType: TextInputType.phone,
                           textInputAction: TextInputAction.next,
                           style: const TextStyle(
                             fontFamily: 'Roboto',
@@ -170,7 +171,7 @@ class _LoginScreenState extends State<LoginScreen> {
                             isDense: true,
                             contentPadding: EdgeInsets.zero,
                             border: InputBorder.none,
-                            hintText: 'Email',
+                            hintText: 'Nomor HP (Contoh: 081234567890)',
                             hintStyle: TextStyle(
                               fontFamily: 'Roboto',
                               fontSize: 15,
@@ -184,7 +185,7 @@ class _LoginScreenState extends State<LoginScreen> {
                 ),
                 const SizedBox(height: 18),
 
-                // Input Field: Password (Icon Lock di kiri + input box + Eye icon toggle di kanan)
+                // Input Field Password
                 Row(
                   crossAxisAlignment: CrossAxisAlignment.center,
                   children: [
@@ -263,7 +264,7 @@ class _LoginScreenState extends State<LoginScreen> {
                 ),
                 const SizedBox(height: 28),
 
-                // Tombol Biru "Login"
+                // Tombol Biru Login
                 SizedBox(
                   width: double.infinity,
                   height: 48,

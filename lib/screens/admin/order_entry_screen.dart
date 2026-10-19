@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import '../../models/service_model.dart';
 import '../../models/order_model.dart';
+import '../../models/customer_model.dart';
 
 class OrderEntryScreen extends StatefulWidget {
   const OrderEntryScreen({super.key});
@@ -10,8 +11,10 @@ class OrderEntryScreen extends StatefulWidget {
 }
 
 class _OrderEntryScreenState extends State<OrderEntryScreen> {
-  final _customerController = TextEditingController();
-  final _weightController = TextEditingController();
+  CustomerModel? _selectedCustomer;
+
+  final _newCustomerNameController = TextEditingController();
+  final _newCustomerPhoneController = TextEditingController();
 
   // data dummy daftar layanan yang tersedia untuk dipilih di dropdown
   final List<ServiceModel> _availableServices = [
@@ -24,12 +27,67 @@ class _OrderEntryScreenState extends State<OrderEntryScreen> {
   double _weight = 0.0;
   double _totalPrice = 0.0;
 
-  @override
-  void dispose() {
-    _customerController.dispose();
-    _weightController.dispose();
-    super.dispose();
-  }
+  // POPUP REGISTRASI PELANGGAN BARU
+  void _showRegisterCustomerDialog() {
+  _newCustomerNameController.clear();
+  _newCustomerPhoneController.clear();
+  showDialog(
+    context: context,
+    builder: (ctx) => AlertDialog(
+      title: const Text('Registrasi Pelanggan Baru'),
+      content: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          TextField(
+            controller: _newCustomerNameController,
+            decoration: const InputDecoration(
+              labelText: 'Nama Lengkap',
+              prefixIcon: Icon(Icons.person),
+            ),
+          ),
+          const SizedBox(height: 12),
+          TextField(
+            controller: _newCustomerPhoneController,
+            keyboardType: TextInputType.phone,
+            decoration: const InputDecoration(
+              labelText: 'Nomor HP / WhatsApp',
+              prefixIcon: Icon(Icons.phone),
+              hintText: '08...',
+            ),
+          ),
+        ],
+      ),
+      actions: [
+        TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('Batal')),
+        ElevatedButton(
+          onPressed: () {
+            final name = _newCustomerNameController.text.trim();
+            final phone = _newCustomerPhoneController.text.trim();
+            if (name.isNotEmpty && phone.isNotEmpty) {
+              // 1. Buat pelanggan baru
+              final newCust = CustomerModel(
+                id: 'CUST-${DateTime.now().millisecondsSinceEpoch.toString().substring(8)}',
+                name: name,
+                phone: phone,
+                password: 'ayamgoreng', // Password default agar mudah demo
+              );
+              // 2. Simpan ke daftar pelanggan dan otomatis pilih pelanggan tersebut
+              setState(() {
+                CustomerModel.dummyCustomers.add(newCust);
+                _selectedCustomer = newCust;
+              });
+              Navigator.pop(ctx);
+              ScaffoldMessenger.of(context).showSnackBar(
+                SnackBar(backgroundColor: Colors.green, content: Text('Pelanggan $name berhasil didaftarkan!')),
+              );
+            }
+          },
+          child: const Text('Daftarkan'),
+        ),
+      ],
+    ),
+  );
+}
 
   // hitung subtotal otomatis 
   void _calculateTotal() {
@@ -42,47 +100,62 @@ class _OrderEntryScreenState extends State<OrderEntryScreen> {
     });
   }
 
-void _submitOrder() {
-  final customer = _customerController.text.trim();
-  // validasi
-  if (customer.isEmpty || _selectedService == null || _weight <= 0) {
-    ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(content: Text('lengkapi nama, layanan, dan berat cucian.')),
+  final _weightController = TextEditingController();
+
+  void _submitOrder() {
+    // validasi
+    if (_selectedCustomer == null || _selectedService == null || _weight <= 0) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Pilih pelanggan, layanan, dan berat cucian!')),
+      );
+      return;
+    }
+
+    // INSTANSIASI DARI INPUT KE ORDERMODEL
+    final newOrder = OrderModel(
+      id: 'ORD-${DateTime.now().millisecondsSinceEpoch.toString().substring(8)}',
+      customerName: _selectedCustomer!.name,
+      customerPhone: _selectedCustomer!.phone, // Relasi ke nomor HP pelanggan
+      serviceName: _selectedService!.name,
+      weight: _weight,
+      pricePerKgSnapshot: _selectedService!.pricePerKG,
+      totalPrice: _totalPrice,
+      status: 'diterima',
+      pickupToken: 'QR-${DateTime.now().millisecondsSinceEpoch.toString().substring(8)}',
+      createdAt: DateTime.now(),
     );
-    return;
+
+    // SIMPAN KE LIST DUMMY & REFRESH TAMPILAN
+    setState(() {
+      OrderModel.dummyOrders.insert(0, newOrder); // insert(0, ...) agar pesanan baru muncul paling atas
+    });
+
+    // reset Form
+    _weightController.clear();
+    setState(() {
+      _selectedCustomer = null;
+      _selectedService = null;
+      _weight = 0.0;
+      _totalPrice = 0.0;
+    });
+
+    // feedback sukses ke admin
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        backgroundColor: Colors.green,
+        content: Text('Pesanan untuk "${newOrder.customerName}" berhasil dibuat!'),
+      ),
+    );
   }
-  // INSTANSIASI DARI INPUT KE ORDERMODEL
-  final newOrder = OrderModel(
-    id: 'ORD-${DateTime.now().millisecondsSinceEpoch.toString().substring(8)}',
-    customerName: customer,
-    serviceName: _selectedService!.name,
-    weight: _weight,
-    pricePerKgSnapshot: _selectedService!.pricePerKG,
-    totalPrice: _totalPrice,
-    status: 'diterima',
-    pickupToken: 'QR-${DateTime.now().millisecondsSinceEpoch.toString().substring(8)}',
-    createdAt: DateTime.now(),
-  );
-  // SIMPAN KE LIST DUMMY & REFRESH TAMPILAN
-  setState(() {
-    OrderModel.dummyOrders.insert(0, newOrder); // insert(0, ...) agar pesanan baru muncul paling atas
-  });
-  // reset Form
-  _customerController.clear();
-  _weightController.clear();
-  setState(() {
-    _weight = 0.0;
-    _totalPrice = 0.0;
-    _selectedService = null;
-  });
-  // feedback sukses ke admin
-  ScaffoldMessenger.of(context).showSnackBar(
-    SnackBar(
-      backgroundColor: Colors.green,
-      content: Text('Pesanan untuk "${newOrder.customerName}" berhasil dibuat'),
-    ),
-  );
-}
+
+  @override
+  void dispose() {
+    _newCustomerNameController.dispose();
+    _newCustomerPhoneController.dispose();
+    _weightController.dispose();
+    super.dispose();
+  }
+
   @override
   Widget build(BuildContext context) {
     // responsive width
@@ -98,20 +171,45 @@ void _submitOrder() {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            // input Nama Pelanggan
-            const Text('Nama Pelanggan', style: TextStyle(fontWeight: FontWeight.bold)),
+            // pilih pelanggan terdaftar atau tambah baru
+            const Text('Pilih Pelanggan', style: TextStyle(fontWeight: FontWeight.bold)),
             const SizedBox(height: 8),
-            TextField(
-              controller: _customerController,
-              decoration: InputDecoration(
-                hintText: 'Masukkan nama pelanggan...',
-                prefixIcon: const Icon(Icons.person),
-                border: OutlineInputBorder(borderRadius: BorderRadius.circular(10)),
-              ),
+            Row(
+              children: [
+                Expanded(
+                  child: DropdownButtonFormField<CustomerModel>(
+                    initialValue: _selectedCustomer,
+                    items: CustomerModel.dummyCustomers
+                        .where((c) => c.role == 'Customer')
+                        .map((cust) {
+                      return DropdownMenuItem(
+                        value: cust,
+                        child: Text('${cust.name} (${cust.phone})'),
+                      );
+                    }).toList(),
+                    onChanged: (val) {
+                      setState(() {
+                        _selectedCustomer = val;
+                      });
+                    },
+                    decoration: InputDecoration(
+                      hintText: '-- Pilih Pelanggan --',
+                      prefixIcon: const Icon(Icons.person),
+                      border: OutlineInputBorder(borderRadius: BorderRadius.circular(10)),
+                    ),
+                  ),
+                ),
+                const SizedBox(width: 8),
+                IconButton.filled(
+                  tooltip: 'Registrasi Pelanggan Baru',
+                  onPressed: _showRegisterCustomerDialog,
+                  icon: const Icon(Icons.person_add),
+                ),
+              ],
             ),
             const SizedBox(height: 20),
 
-            // dropdown Pilih Layanan
+            // dropdown pilih layanan
             const Text('Pilih Layanan Laundry', style: TextStyle(fontWeight: FontWeight.bold)),
             const SizedBox(height: 8),
             DropdownButtonFormField<ServiceModel>(
@@ -124,7 +222,7 @@ void _submitOrder() {
               }).toList(),
               onChanged: (ServiceModel? newService) {
                 _selectedService = newService;
-                _calculateTotal(); // Hitung ulang saat layanan diganti
+                _calculateTotal(); // hitung ulang saat layanan diganti
               },
               decoration: InputDecoration(
                 hintText: 'Pilih Layanan',

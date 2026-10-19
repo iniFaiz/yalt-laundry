@@ -1,6 +1,7 @@
 class OrderModel {
   final String id;
   final String customerName;
+  final String customerPhone;
   final String serviceName;
   final double weight;
   final double pricePerKgSnapshot;
@@ -12,6 +13,7 @@ class OrderModel {
   OrderModel({
     required this.id,
     required this.customerName,
+    required this.customerPhone,
     required this.serviceName,
     required this.weight,
     required this.pricePerKgSnapshot,
@@ -26,6 +28,7 @@ class OrderModel {
     OrderModel(
       id: 'ORD-001',
       customerName: 'Prabowo',
+      customerPhone: '081234567890',
       serviceName: 'Cuci Setrika',
       weight: 3.0,
       pricePerKgSnapshot: 8000,
@@ -37,24 +40,14 @@ class OrderModel {
     OrderModel(
       id: 'ORD-002',
       customerName: 'Jokowi',
+      customerPhone: '089876543210',
       serviceName: 'Cuci Kering',
       weight: 2.0,
       pricePerKgSnapshot: 6000,
       totalPrice: 12000,
-      status: 'siap_diambil', // Siap discan oleh admin!
+      status: 'siap_diambil',
       pickupToken: '000234',
       createdAt: DateTime.now().subtract(const Duration(hours: 5)),
-    ),
-    OrderModel(
-      id: 'ORD-003',
-      customerName: 'Reezqi Goy',
-      serviceName: 'Cuci Setrika',
-      weight: 4.0,
-      pricePerKgSnapshot: 8000,
-      totalPrice: 32000,
-      status: 'diambil', // Sudah selesai
-      pickupToken: '000345',
-      createdAt: DateTime.now().subtract(const Duration(days: 1)),
     ),
   ];
 }

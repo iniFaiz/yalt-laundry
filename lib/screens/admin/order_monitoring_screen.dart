@@ -173,7 +173,6 @@ class _OrderMonitoringScreenState extends State<OrderMonitoringScreen> {
   @override
   Widget build(BuildContext context) {
     // PERHITUNGAN LAPORAN
-    final totalOrders = OrderModel.dummyOrders.length;
     final activeOrders = OrderModel.dummyOrders.where((o) => o.status != 'diambil').length;
     final completedOrders = OrderModel.dummyOrders.where((o) => o.status == 'diambil').length;
     final totalRevenue = OrderModel.dummyOrders
@@ -193,7 +192,7 @@ class _OrderMonitoringScreenState extends State<OrderMonitoringScreen> {
             ],
           ),
         ),
-        // tombol Scanner QR Mengambang
+        // tombol Scanner QR terbang
         floatingActionButton: FloatingActionButton.extended(
           onPressed: _openScannerDialog,
           backgroundColor: const Color(0xFF007BFF),
@@ -231,12 +230,12 @@ class _OrderMonitoringScreenState extends State<OrderMonitoringScreen> {
             Expanded(
               child: TabBarView(
                 children: [
-                  // Cucian Aktif
+                  // cucian Aktif
                   _buildOrderList(
                     OrderModel.dummyOrders.where((o) => o.status != 'diambil').toList(),
                     isActiveList: true,
                   ),
-                  // Riwayat Selesai
+                  // riwayat Selesai
                   _buildOrderList(
                     OrderModel.dummyOrders.where((o) => o.status == 'diambil').toList(),
                     isActiveList: false,
