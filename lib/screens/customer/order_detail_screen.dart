@@ -32,6 +32,12 @@ class OrderDetailScreen extends StatelessWidget {
 
     return Scaffold(
       appBar: AppBar(
+        // tombol kembali ke halaman sebelumnya pakai pop
+        leading: IconButton(
+          icon: const Icon(Icons.arrow_back),
+          tooltip: 'Kembali',
+          onPressed: () => Navigator.pop(context),
+        ),
         title: Text('Detail ${order.id}'),
         centerTitle: true,
       ),
@@ -150,6 +156,7 @@ class OrderDetailScreen extends StatelessWidget {
     final steps = ['Diterima', 'Dicuci', 'Siap Diambil', 'Selesai'];
 
     return Row(
+      crossAxisAlignment: CrossAxisAlignment.start, // semua langkah rata atas walau label 2 baris
       children: List.generate(steps.length * 2 - 1, (index) {
         if (index.isEven) {
           final stepIndex = index ~/ 2;
@@ -166,12 +173,18 @@ class OrderDetailScreen extends StatelessWidget {
                 ),
               ),
               const SizedBox(height: 6),
-              Text(
-                steps[stepIndex],
-                style: TextStyle(
+              // lebar label dibatasi agar timeline muat di layar kecil
+              SizedBox(
+                width: 56,
+                child: Text(
+                  steps[stepIndex],
+                  textAlign: TextAlign.center,
+                  maxLines: 2,
+                  style: TextStyle(
                   fontSize: 11,
                   fontWeight: isCompleted ? FontWeight.bold : FontWeight.normal,
-                  color: isCompleted ? Colors.black : Colors.grey,
+                    color: isCompleted ? Colors.black : Colors.grey,
+                  ),
                 ),
               ),
             ],
@@ -182,7 +195,7 @@ class OrderDetailScreen extends StatelessWidget {
           return Expanded(
             child: Container(
               height: 3,
-              margin: const EdgeInsets.only(bottom: 22),
+              margin: const EdgeInsets.only(top: 14.5), // sejajar dengan tengah lingkaran
               color: isLineActive ? Colors.blue : Colors.grey.shade300,
             ),
           );
@@ -198,12 +211,17 @@ class OrderDetailScreen extends StatelessWidget {
         mainAxisAlignment: MainAxisAlignment.spaceBetween,
         children: [
           Text(label, style: TextStyle(color: Colors.grey.shade700)),
-          Text(
-            value,
-            style: TextStyle(
-              fontWeight: isBold ? FontWeight.bold : FontWeight.normal,
-              fontSize: isBold ? 16 : 14,
-              color: valueColor ?? Colors.black,
+          const SizedBox(width: 12),
+          // Flexible agar nilai panjang turun ke baris baru, bukan overflow
+          Flexible(
+            child: Text(
+              value,
+              textAlign: TextAlign.right,
+              style: TextStyle(
+                fontWeight: isBold ? FontWeight.bold : FontWeight.normal,
+                fontSize: isBold ? 16 : 14,
+                color: valueColor ?? Colors.black,
+              ),
             ),
           ),
         ],

@@ -9,12 +9,8 @@ class ServiceScreen extends StatefulWidget {
 }
 
 class _ServiceScreenState extends State<ServiceScreen> {
-  // data dummy awal
-  final List<ServiceModel> _services = [
-    ServiceModel(id: '1', name: 'Cuci Kering', pricePerKG: 6000, isActive: true),
-    ServiceModel(id: '2', name: 'Cuci Setrika', pricePerKG: 8000, isActive: true),
-    ServiceModel(id: '3', name: 'Setrika Saja', pricePerKG: 5000, isActive: true),
-  ];
+  // ambil data dummy layanan yang dipakai bersama
+  final List<ServiceModel> _services = ServiceModel.dummyServices;
 
   bool _isLoading = false;
 
@@ -47,34 +43,16 @@ class _ServiceScreenState extends State<ServiceScreen> {
   }
 
   // untuk memunculkan Modal Popup Tambah Layanan
-  void _showAddServiceDialog() {
+  Future<void> _showAddServiceDialog() async {
     _nameController.clear();
     _priceController.clear();
 
-    showDialog(
+    // tunggu hasil pop dari dialog, berisi layanan baru atau null jika batal
+    final newService = await showDialog<ServiceModel>(
       context: context,
       builder: (ctx) => AlertDialog(
         title: const Text('Tambah Layanan Baru'),
-        content: Column(
-          mainAxisSize: MainAxisSize.min, // agar tinggi modal pas dengan isi
-          children: [
-            TextField(
-              controller: _nameController,
-              decoration: const InputDecoration(
-                labelText: 'Nama Layanan (misal: Cuci Bedcover)',
-              ),
-            ),
-            const SizedBox(height: 12),
-            TextField(
-              controller: _priceController,
-              keyboardType: TextInputType.number,
-              decoration: const InputDecoration(
-                labelText: 'Tarif per Kg (Rp)',
-                prefixText: 'Rp ',
-              ),
-            ),
-          ],
-        ),
+        content: _buildServiceForm('Nama Layanan (misal: Cuci Bedcover)'),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(ctx),
@@ -86,16 +64,58 @@ class _ServiceScreenState extends State<ServiceScreen> {
               final price = double.tryParse(_priceController.text) ?? 0.0;
 
               if (name.isNotEmpty && price > 0) {
-                // nambah data baru lalu panggil setState biar ListView terupdate
+                // kirim data layanan baru ke halaman pemanggil lewat hasil pop
+                Navigator.pop(
+                  ctx,
+                  ServiceModel(
+                    id: DateTime.now().millisecondsSinceEpoch.toString(),
+                    name: name,
+                    pricePerKG: price,
+                    isActive: true,
+                  ),
+                );
+              }
+            },
+            child: const Text('Simpan'),
+          ),
+        ],
+      ),
+    );
+
+    // nambah data baru lalu panggil setState biar ListView terupdate
+    if (newService != null && mounted) {
+      setState(() {
+        _services.add(newService);
+      });
+    }
+  }
+
+  // untuk memunculkan Modal Popup Edit Nama & Tarif Layanan
+  void _showEditServiceDialog(ServiceModel service) {
+    // isi form dengan data lama memakai getter
+    _nameController.text = service.name;
+    _priceController.text = service.pricePerKG.toStringAsFixed(0);
+
+    showDialog(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('Ubah Layanan'),
+        content: _buildServiceForm('Nama Layanan'),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx),
+            child: const Text('Batal'),
+          ),
+          ElevatedButton(
+            onPressed: () {
+              final name = _nameController.text.trim();
+              final price = double.tryParse(_priceController.text) ?? 0.0;
+
+              if (name.isNotEmpty && price > 0) {
+                // ubah data lewat setter model, lalu setState biar ListView terupdate
                 setState(() {
-                  _services.add(
-                    ServiceModel(
-                      id: DateTime.now().millisecondsSinceEpoch.toString(),
-                      name: name,
-                      pricePerKG: price,
-                      isActive: true,
-                    ),
-                  );
+                  service.name = name;
+                  service.pricePerKG = price;
                 });
                 Navigator.pop(ctx);
               }
@@ -104,6 +124,28 @@ class _ServiceScreenState extends State<ServiceScreen> {
           ),
         ],
       ),
+    );
+  }
+
+  // form isian nama & tarif yang dipakai dialog tambah dan edit
+  Widget _buildServiceForm(String nameLabel) {
+    return Column(
+      mainAxisSize: MainAxisSize.min, // agar tinggi modal pas dengan isi
+      children: [
+        TextField(
+          controller: _nameController,
+          decoration: InputDecoration(labelText: nameLabel),
+        ),
+        const SizedBox(height: 12),
+        TextField(
+          controller: _priceController,
+          keyboardType: TextInputType.number,
+          decoration: const InputDecoration(
+            labelText: 'Tarif per Kg (Rp)',
+            prefixText: 'Rp ',
+          ),
+        ),
+      ],
     );
   }
 
@@ -131,6 +173,8 @@ class _ServiceScreenState extends State<ServiceScreen> {
                 return Card(
                   margin: const EdgeInsets.only(bottom: 12),
                   child: ListTile(
+                    // ketuk kartu untuk ubah nama & tarif layanan
+                    onTap: () => _showEditServiceDialog(service),
                     leading: CircleAvatar(
                       child: Text('${index + 1}'),
                     ),

@@ -1,4 +1,9 @@
+import '../utils/format_rupiah.dart';
+
 class OrderModel {
+  // urutan alur status cucian yang sah
+  static const List<String> statusFlow = ['diterima', 'dicuci', 'siap_diambil', 'diambil'];
+
   final String id;
   final String customerName;
   final String customerPhone;
@@ -6,7 +11,7 @@ class OrderModel {
   final double weight;
   final double pricePerKgSnapshot;
   final double totalPrice;
-  String status; // 'diterima', 'dicuci', 'siap_diambil', 'diambil'
+  String _status; // private, diubah lewat setter status
   final String pickupToken; // unique token qr
   final DateTime createdAt;
 
@@ -18,19 +23,32 @@ class OrderModel {
     required this.weight,
     required this.pricePerKgSnapshot,
     required this.totalPrice,
-    required this.status,
+    required this._status, // dipanggil dengan nama parameter status
     required this.pickupToken,
     required this.createdAt,
   });
 
+  // getter status cucian
+  String get status => _status;
+
+  // setter status cucian, hanya boleh maju satu langkah sesuai alur statusFlow
+  set status(String value) {
+    final currentIndex = statusFlow.indexOf(_status);
+    final nextIndex = statusFlow.indexOf(value);
+    if (nextIndex != currentIndex + 1) {
+      throw ArgumentError('Transisi status $_status -> $value tidak valid');
+    }
+    _status = value;
+  }
+
   // getter format rupiah total harga
-  String get formattedTotalPrice => 'Rp ${totalPrice.toStringAsFixed(0)}';
+  String get formattedTotalPrice => formatRupiah(totalPrice);
 
   // getter format berat cucian
   String get formattedWeight => '${weight.toStringAsFixed(1)} kg';
 
   // getter format tarif snapshot per kg
-  String get formattedPricePerKg => 'Rp ${pricePerKgSnapshot.toStringAsFixed(0)} / kg';
+  String get formattedPricePerKg => '${formatRupiah(pricePerKgSnapshot)} / kg';
 
   // getter cek apakah cucian siap diambil
   bool get isReadyForPickup => status == 'siap_diambil';

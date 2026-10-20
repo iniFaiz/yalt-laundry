@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import '../../models/service_model.dart';
 import '../../models/order_model.dart';
 import '../../models/customer_model.dart';
+import '../../utils/format_rupiah.dart';
 
 class OrderEntryScreen extends StatefulWidget {
   const OrderEntryScreen({super.key});
@@ -18,12 +19,9 @@ class _OrderEntryScreenState extends State<OrderEntryScreen> {
   final _newCustomerPhoneController = TextEditingController();
   final _weightController = TextEditingController();
 
-  // data dummy daftar layanan yang tersedia untuk dipilih di dropdown
-  final List<ServiceModel> _availableServices = [
-    ServiceModel(id: '1', name: 'Cuci Kering', pricePerKG: 6000, isActive: true),
-    ServiceModel(id: '2', name: 'Cuci Setrika', pricePerKG: 8000, isActive: true),
-    ServiceModel(id: '3', name: 'Setrika Saja', pricePerKG: 5000, isActive: true),
-  ];
+  // hanya layanan aktif yang bisa dipilih di dropdown
+  final List<ServiceModel> _availableServices =
+      ServiceModel.dummyServices.where((s) => s.isActive).toList();
 
   ServiceModel? _selectedService;
   double _weight = 0.0;
@@ -187,13 +185,14 @@ class _OrderEntryScreenState extends State<OrderEntryScreen> {
               children: [
                 Expanded(
                   child: DropdownButtonFormField<CustomerModel>(
+                    isExpanded: true, // teks panjang dipotong agar tidak overflow
                     initialValue: _selectedCustomer,
                     items: CustomerModel.dummyCustomers
                         .where((c) => c.role == 'Customer')
                         .map((cust) {
                       return DropdownMenuItem(
                         value: cust,
-                        child: Text('${cust.name} (${cust.phone})'),
+                        child: Text('${cust.name} (${cust.phone})', overflow: TextOverflow.ellipsis),
                       );
                     }).toList(),
                     onChanged: (val) {
@@ -222,11 +221,12 @@ class _OrderEntryScreenState extends State<OrderEntryScreen> {
             const Text('Pilih Layanan Laundry', style: TextStyle(fontWeight: FontWeight.bold)),
             const SizedBox(height: 8),
             DropdownButtonFormField<ServiceModel>(
+              isExpanded: true, // teks panjang dipotong agar tidak overflow
               initialValue: _selectedService,
               items: _availableServices.map((service) {
                 return DropdownMenuItem(
                   value: service,
-                  child: Text('${service.name} (${service.formattedPrice})'),
+                  child: Text('${service.name} (${service.formattedPrice})', overflow: TextOverflow.ellipsis),
                 );
               }).toList(),
               onChanged: (ServiceModel? newService) {
@@ -276,12 +276,19 @@ class _OrderEntryScreenState extends State<OrderEntryScreen> {
                     'Total Tagihan:',
                     style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600),
                   ),
-                  Text(
-                    'Rp ${_totalPrice.toStringAsFixed(0)}',
-                    style: TextStyle(
-                      fontSize: 22,
-                      fontWeight: FontWeight.bold,
-                      color: Colors.blue.shade900,
+                  const SizedBox(width: 8),
+                  // FittedBox mengecilkan angka jika nominal terlalu panjang untuk layar
+                  Flexible(
+                    child: FittedBox(
+                      fit: BoxFit.scaleDown,
+                      child: Text(
+                        formatRupiah(_totalPrice),
+                        style: TextStyle(
+                          fontSize: 22,
+                          fontWeight: FontWeight.bold,
+                          color: Colors.blue.shade900,
+                        ),
+                      ),
                     ),
                   ),
                 ],

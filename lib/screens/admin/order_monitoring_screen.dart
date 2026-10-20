@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import '../../models/order_model.dart';
+import '../../utils/format_rupiah.dart';
 
 class OrderMonitoringScreen extends StatefulWidget {
   const OrderMonitoringScreen({super.key});
@@ -278,7 +279,7 @@ class _OrderMonitoringScreenState extends State<OrderMonitoringScreen> {
                           children: [
                             _buildReportStat('Aktif', '$activeOrders', Colors.orange.shade800),
                             _buildReportStat('Selesai', '$completedOrders', Colors.green.shade800),
-                            _buildReportStat('Omzet Selesai', 'Rp ${totalRevenue.toStringAsFixed(0)}', Colors.blue.shade900),
+                            _buildReportStat('Omzet Selesai', formatRupiah(totalRevenue), Colors.blue.shade900),
                           ],
                         ),
                       ),
@@ -315,15 +316,24 @@ class _OrderMonitoringScreenState extends State<OrderMonitoringScreen> {
   }
 
   Widget _buildReportStat(String label, String value, Color color) {
-    return Column(
-      children: [
-        Text(label, style: const TextStyle(fontSize: 12, color: Colors.black54)),
-        const SizedBox(height: 4),
-        Text(
-          value,
-          style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: color),
-        ),
-      ],
+    // Expanded membagi lebar sama rata, FittedBox mengecilkan teks jika tidak muat
+    return Expanded(
+      child: Column(
+        children: [
+          FittedBox(
+            fit: BoxFit.scaleDown,
+            child: Text(label, style: const TextStyle(fontSize: 12, color: Colors.black54)),
+          ),
+          const SizedBox(height: 4),
+          FittedBox(
+            fit: BoxFit.scaleDown,
+            child: Text(
+              value,
+              style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: color),
+            ),
+          ),
+        ],
+      ),
     );
   }
 
@@ -358,7 +368,7 @@ class _OrderMonitoringScreenState extends State<OrderMonitoringScreen> {
                     Container(
                       padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
                       decoration: BoxDecoration(
-                        color: statusColor.withOpacity(0.15),
+                        color: statusColor.withValues(alpha: 0.15),
                         borderRadius: BorderRadius.circular(20),
                         border: Border.all(color: statusColor),
                       ),
@@ -391,12 +401,16 @@ class _OrderMonitoringScreenState extends State<OrderMonitoringScreen> {
                           style: ElevatedButton.styleFrom(backgroundColor: Colors.green, foregroundColor: Colors.white),
                           onPressed: () => _advanceOrderStatus(order),
                           icon: const Icon(Icons.check_circle_outline, size: 16),
-                          label: const Text('Tandai Siap Diambil'),
+                          label: const Text('Siap Diambil'),
                         ),
                       if (order.isReadyForPickup)
-                        const Text(
-                          'Menunggu Scan QR Pelanggan',
-                          style: TextStyle(fontStyle: FontStyle.italic, color: Colors.green),
+                        // Flexible agar teks turun ke baris baru di layar sempit
+                        const Flexible(
+                          child: Text(
+                            'Menunggu Scan QR Pelanggan',
+                            textAlign: TextAlign.right,
+                            style: TextStyle(fontStyle: FontStyle.italic, color: Colors.green),
+                          ),
                         ),
                     ],
                   ),

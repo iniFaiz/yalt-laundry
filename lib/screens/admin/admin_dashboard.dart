@@ -1,7 +1,9 @@
 import 'package:flutter/material.dart';
+import '../login_screen.dart';
 import 'service_screen.dart';
 import 'order_entry_screen.dart';
 import 'order_monitoring_screen.dart';
+import 'customer_screen.dart';
 
 class AdminDashboard extends StatefulWidget {
   const AdminDashboard({super.key});
@@ -18,6 +20,7 @@ class _AdminDashboardState extends State<AdminDashboard> {
   final List<Widget> _pages = [
     const OrderEntryScreen(),
     const OrderMonitoringScreen(),
+    const CustomerScreen(),
     const ServiceScreen(),
   ];
 
@@ -39,9 +42,10 @@ class _AdminDashboardState extends State<AdminDashboard> {
             ),
             onPressed: () {
               Navigator.pop(ctx);
-              // kembali ke Login pakai named route & bersihkan riwayat halaman
-              Navigator.of(context).pushNamedAndRemoveUntil(
-                '/',
+              // kembali ke Login pakai push & bersihkan riwayat halaman
+              Navigator.pushAndRemoveUntil(
+                context,
+                MaterialPageRoute(builder: (context) => const LoginScreen()),
                 (route) => false,
               );
             },
@@ -83,6 +87,11 @@ class _AdminDashboardState extends State<AdminDashboard> {
             icon: Icon(Icons.track_changes_outlined),
             selectedIcon: Icon(Icons.track_changes),
             label: 'Monitoring',
+          ),
+          NavigationDestination(
+            icon: Icon(Icons.people_outline),
+            selectedIcon: Icon(Icons.people),
+            label: 'Pelanggan',
           ),
           NavigationDestination(
             icon: Icon(Icons.local_laundry_service_outlined),

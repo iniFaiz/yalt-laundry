@@ -1,6 +1,9 @@
 import 'package:flutter/material.dart';
 import '../../models/order_model.dart';
 import '../../models/customer_model.dart';
+import '../../models/service_model.dart';
+import '../login_screen.dart';
+import 'order_detail_screen.dart';
 
 class CustomerHomeScreen extends StatefulWidget {
   final CustomerModel customer;
@@ -14,7 +17,8 @@ class CustomerHomeScreen extends StatefulWidget {
   State<CustomerHomeScreen> createState() => _CustomerHomeScreenState();
 }
 
-class _CustomerHomeScreenState extends State<CustomerHomeScreen> {
+// WidgetsBindingObserver dipakai untuk memantau lifecycle aplikasi (on pause / on resume)
+class _CustomerHomeScreenState extends State<CustomerHomeScreen> with WidgetsBindingObserver {
   // index untuk bottom navbar
   int _currentIndex = 0;
   bool _isLoading = true; // status loading data awal
@@ -23,7 +27,39 @@ class _CustomerHomeScreenState extends State<CustomerHomeScreen> {
   @override
   void initState() {
     super.initState();
+    // daftarkan observer lifecycle aplikasi
+    WidgetsBinding.instance.addObserver(this);
     _loadInitialOrders();
+  }
+
+  // observer dilepas saat halaman ditutup (lifecycle on destroy)
+  @override
+  void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
+    super.dispose();
+  }
+
+  // dipanggil otomatis setiap status lifecycle aplikasi berubah
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (state == AppLifecycleState.paused) {
+      // on pause: aplikasi masuk background (pindah app / layar dimatikan)
+      debugPrint('Lifecycle: on pause');
+    } else if (state == AppLifecycleState.resumed) {
+      // on resume: aplikasi dibuka lagi, muat ulang status cucian terbaru
+      debugPrint('Lifecycle: on resume');
+      _reloadOnResume();
+    }
+  }
+
+  // fungsi asinkron muat ulang data saat aplikasi kembali dibuka
+  Future<void> _reloadOnResume() async {
+    await _handleRefresh();
+    if (mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Status cucian diperbarui')),
+      );
+    }
   }
 
   // fungsi asinkron memuat data awal cucian pelanggan
@@ -67,9 +103,10 @@ class _CustomerHomeScreenState extends State<CustomerHomeScreen> {
             ),
             onPressed: () {
               Navigator.pop(ctx);
-              // kembali ke login pakai named route dan hapus tumpukan halaman
-              Navigator.of(context).pushNamedAndRemoveUntil(
-                '/',
+              // kembali ke login pakai push dan hapus tumpukan halaman
+              Navigator.pushAndRemoveUntil(
+                context,
+                MaterialPageRoute(builder: (context) => const LoginScreen()),
                 (route) => false,
               );
             },
@@ -99,22 +136,27 @@ class _CustomerHomeScreenState extends State<CustomerHomeScreen> {
           children: [
             CircleAvatar(
               radius: 18,
-              backgroundColor: const Color(0xFF007BFF).withOpacity(0.12),
+              backgroundColor: const Color(0xFF007BFF).withValues(alpha: 0.12),
               child: const Icon(Icons.person, color: Color(0xFF007BFF), size: 20),
             ),
             const SizedBox(width: 12),
-            Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  'Halo, ${widget.customer.name} 👋',
-                  style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: Colors.black87),
-                ),
-                Text(
-                  widget.customer.phone,
-                  style: const TextStyle(fontSize: 11, color: Colors.grey),
-                ),
-              ],
+            // Expanded agar nama panjang tidak overflow, dipotong dengan ellipsis
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    'Halo, ${widget.customer.name} 👋',
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: Colors.black87),
+                  ),
+                  Text(
+                    widget.customer.phone,
+                    style: const TextStyle(fontSize: 11, color: Colors.grey),
+                  ),
+                ],
+              ),
             ),
           ],
         ),
@@ -142,7 +184,7 @@ class _CustomerHomeScreenState extends State<CustomerHomeScreen> {
         decoration: BoxDecoration(
           boxShadow: [
             BoxShadow(
-              color: Colors.black.withOpacity(0.04),
+              color: Colors.black.withValues(alpha: 0.04),
               blurRadius: 10,
               offset: const Offset(0, -3),
             ),
@@ -152,7 +194,7 @@ class _CustomerHomeScreenState extends State<CustomerHomeScreen> {
           backgroundColor: Colors.white,
           elevation: 0,
           selectedIndex: _currentIndex,
-          indicatorColor: const Color(0xFF007BFF).withOpacity(0.15),
+          indicatorColor: const Color(0xFF007BFF).withValues(alpha: 0.15),
           onDestinationSelected: (int index) {
             setState(() {
               _currentIndex = index;
@@ -224,14 +266,18 @@ class _CustomerHomeScreenState extends State<CustomerHomeScreen> {
         Row(
           mainAxisAlignment: MainAxisAlignment.spaceBetween,
           children: [
-            const Text(
-              'Cucian Sedang Berlangsung',
-              style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: Colors.black87),
+            const Expanded(
+              child: Text(
+                'Cucian Sedang Berlangsung',
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: Colors.black87),
+              ),
             ),
             Container(
               padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
               decoration: BoxDecoration(
-                color: const Color(0xFF007BFF).withOpacity(0.1),
+                color: const Color(0xFF007BFF).withValues(alpha: 0.1),
                 borderRadius: BorderRadius.circular(12),
               ),
               child: Text(
@@ -255,12 +301,8 @@ class _CustomerHomeScreenState extends State<CustomerHomeScreen> {
 
   // widget gridview untuk daftar paket layanan 2 kolom
   Widget _buildServiceGrid() {
-    final services = [
-      {'title': 'Cuci Kering', 'price': 'Rp 6.000 / kg', 'icon': Icons.local_laundry_service},
-      {'title': 'Cuci Setrika', 'price': 'Rp 8.000 / kg', 'icon': Icons.iron},
-      {'title': 'Setrika Saja', 'price': 'Rp 5.000 / kg', 'icon': Icons.checkroom},
-      {'title': 'Cuci Kilat', 'price': 'Rp 12.000 / kg', 'icon': Icons.flash_on},
-    ];
+    // hanya tampilkan layanan yang masih aktif
+    final services = ServiceModel.dummyServices.where((s) => s.isActive).toList();
 
     return GridView.builder(
       shrinkWrap: true,
@@ -270,10 +312,10 @@ class _CustomerHomeScreenState extends State<CustomerHomeScreen> {
         crossAxisCount: 2, // 2 kolom sejajar
         crossAxisSpacing: 10,
         mainAxisSpacing: 10,
-        childAspectRatio: 2.1, // proporsi kartu kotak memanjang
+        mainAxisExtent: 72, // tinggi kartu tetap agar teks tidak terpotong
       ),
       itemBuilder: (context, index) {
-        final item = services[index];
+        final service = services[index];
         return Container(
           padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
           decoration: BoxDecoration(
@@ -286,10 +328,10 @@ class _CustomerHomeScreenState extends State<CustomerHomeScreen> {
               Container(
                 padding: const EdgeInsets.all(8),
                 decoration: BoxDecoration(
-                  color: const Color(0xFF007BFF).withOpacity(0.1),
+                  color: const Color(0xFF007BFF).withValues(alpha: 0.1),
                   borderRadius: BorderRadius.circular(8),
                 ),
-                child: Icon(item['icon'] as IconData, color: const Color(0xFF007BFF), size: 18),
+                child: Icon(_getServiceIcon(service.name), color: const Color(0xFF007BFF), size: 18),
               ),
               const SizedBox(width: 8),
               Expanded(
@@ -298,15 +340,18 @@ class _CustomerHomeScreenState extends State<CustomerHomeScreen> {
                   mainAxisAlignment: MainAxisAlignment.center,
                   children: [
                     Text(
-                      item['title'] as String,
+                      service.name,
                       style: const TextStyle(fontSize: 12, fontWeight: FontWeight.bold),
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis,
                     ),
                     const SizedBox(height: 2),
+                    // menggunakan getter formattedPrice dari model
                     Text(
-                      item['price'] as String,
+                      service.formattedPrice,
                       style: const TextStyle(fontSize: 10, color: Colors.grey),
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
                     ),
                   ],
                 ),
@@ -316,6 +361,20 @@ class _CustomerHomeScreenState extends State<CustomerHomeScreen> {
         );
       },
     );
+  }
+
+  // ikon kartu layanan berdasarkan nama layanan
+  IconData _getServiceIcon(String name) {
+    switch (name) {
+      case 'Cuci Setrika':
+        return Icons.iron;
+      case 'Setrika Saja':
+        return Icons.checkroom;
+      case 'Cuci Kilat':
+        return Icons.flash_on;
+      default:
+        return Icons.local_laundry_service;
+    }
   }
 
   // tab riwayat
@@ -377,13 +436,18 @@ class _CustomerHomeScreenState extends State<CustomerHomeScreen> {
         color: Colors.transparent,
         child: InkWell(
           borderRadius: BorderRadius.circular(16),
-          onTap: () {
-            // pindah ke detail pakai named route membawa argumen objek order
-            Navigator.pushNamed(
+          onTap: () async {
+            // pindah ke detail pakai push, objek order dikirim lewat argumen constructor
+            await Navigator.push(
               context,
-              '/order-detail',
-              arguments: order,
+              MaterialPageRoute(
+                builder: (context) => OrderDetailScreen(order: order),
+              ),
             );
+            // setelah kembali (pop) dari detail, refresh tampilan status
+            if (mounted) {
+              setState(() {});
+            }
           },
           child: Padding(
             padding: const EdgeInsets.all(16.0),
@@ -451,19 +515,21 @@ class _CustomerHomeScreenState extends State<CustomerHomeScreen> {
                 Row(
                   mainAxisAlignment: MainAxisAlignment.spaceBetween,
                   children: [
-                    Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        const Text('Total Tagihan', style: TextStyle(fontSize: 11, color: Colors.grey)),
-                        Text(
-                          order.formattedTotalPrice,
-                          style: const TextStyle(
-                            fontSize: 15,
-                            fontWeight: FontWeight.bold,
-                            color: Color(0xFF007BFF),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          const Text('Total Tagihan', style: TextStyle(fontSize: 11, color: Colors.grey)),
+                          Text(
+                            order.formattedTotalPrice,
+                            style: const TextStyle(
+                              fontSize: 15,
+                              fontWeight: FontWeight.bold,
+                              color: Color(0xFF007BFF),
+                            ),
                           ),
-                        ),
-                      ],
+                        ],
+                      ),
                     ),
                     Row(
                       children: [

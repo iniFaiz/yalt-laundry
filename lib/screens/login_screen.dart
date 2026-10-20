@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import '../widgets/app_logo.dart';
 import '../models/customer_model.dart';
+import 'home_screen.dart';
 
 class LoginScreen extends StatefulWidget {
   const LoginScreen({super.key});
@@ -68,10 +69,13 @@ class _LoginScreenState extends State<LoginScreen> {
         _isLoading = false;
       });
 
-      // pindah ke home menggunakan named route membawa parameter user
-      Navigator.of(context).pushReplacementNamed(
-        '/home',
-        arguments: user,
+      // pindah ke home pakai pushReplacement agar tidak bisa back ke login,
+      // data user dikirim lewat argumen constructor
+      Navigator.pushReplacement(
+        context,
+        MaterialPageRoute(
+          builder: (context) => HomeScreen(currentUser: user),
+        ),
       );
     } else {
       setState(() {
