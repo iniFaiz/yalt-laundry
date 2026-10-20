@@ -5,7 +5,7 @@ plugins {
 }
 
 android {
-    namespace = "com.example.my_app"
+    namespace = "com.yalt.laundry"
     compileSdk = flutter.compileSdkVersion
     ndkVersion = flutter.ndkVersion
 

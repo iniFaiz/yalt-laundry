@@ -1,7 +1,12 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'screens/login_screen.dart';
 
-void main() {
+Future<void> main() async {
+  // binding harus siap sebelum memanggil SystemChrome
+  WidgetsFlutterBinding.ensureInitialized();
+  // kunci orientasi layar hanya vertikal (portrait), mode horizontal dimatikan
+  await SystemChrome.setPreferredOrientations([DeviceOrientation.portraitUp]);
   runApp(const MyApp());
 }
 
