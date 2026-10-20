@@ -50,6 +50,22 @@ class OrderModel {
   // getter format tarif snapshot per kg
   String get formattedPricePerKg => '${formatRupiah(pricePerKgSnapshot)} / kg';
 
+  // getter label status yang mudah dibaca untuk ditampilkan di layar
+  String get statusLabel {
+    switch (status) {
+      case 'diterima':
+        return 'Diterima';
+      case 'dicuci':
+        return 'Sedang Dicuci';
+      case 'siap_diambil':
+        return 'Siap Diambil';
+      case 'diambil':
+        return 'Selesai';
+      default:
+        return status;
+    }
+  }
+
   // getter cek apakah cucian siap diambil
   bool get isReadyForPickup => status == 'siap_diambil';
 

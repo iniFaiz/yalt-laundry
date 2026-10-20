@@ -3,6 +3,7 @@ import '../../models/service_model.dart';
 import '../../models/order_model.dart';
 import '../../models/customer_model.dart';
 import '../../utils/format_rupiah.dart';
+import '../../widgets/customer_form_dialog.dart';
 
 class OrderEntryScreen extends StatefulWidget {
   const OrderEntryScreen({super.key});
@@ -15,8 +16,6 @@ class _OrderEntryScreenState extends State<OrderEntryScreen> {
   CustomerModel? _selectedCustomer;
   bool _isSubmitting = false; // status loading saat proses simpan asinkron
 
-  final _newCustomerNameController = TextEditingController();
-  final _newCustomerPhoneController = TextEditingController();
   final _weightController = TextEditingController();
 
   // hanya layanan aktif yang bisa dipilih di dropdown
@@ -27,65 +26,18 @@ class _OrderEntryScreenState extends State<OrderEntryScreen> {
   double _weight = 0.0;
   double _totalPrice = 0.0;
 
-  // POPUP REGISTRASI PELANGGAN BARU
-  void _showRegisterCustomerDialog() {
-    _newCustomerNameController.clear();
-    _newCustomerPhoneController.clear();
-    showDialog(
-      context: context,
-      builder: (ctx) => AlertDialog(
-        title: const Text('Registrasi Pelanggan Baru'),
-        content: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            TextField(
-              controller: _newCustomerNameController,
-              decoration: const InputDecoration(
-                labelText: 'Nama Lengkap',
-                prefixIcon: Icon(Icons.person),
-              ),
-            ),
-            const SizedBox(height: 12),
-            TextField(
-              controller: _newCustomerPhoneController,
-              keyboardType: TextInputType.phone,
-              decoration: const InputDecoration(
-                labelText: 'Nomor HP / WhatsApp',
-                prefixIcon: Icon(Icons.phone),
-                hintText: '08...',
-              ),
-            ),
-          ],
-        ),
-        actions: [
-          TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('Batal')),
-          ElevatedButton(
-            onPressed: () {
-              final name = _newCustomerNameController.text.trim();
-              final phone = _newCustomerPhoneController.text.trim();
-              if (name.isNotEmpty && phone.isNotEmpty) {
-                // 1. Buat pelanggan baru
-                final newCust = CustomerModel(
-                  id: 'CUST-${DateTime.now().millisecondsSinceEpoch.toString().substring(8)}',
-                  name: name,
-                  phone: phone,
-                  password: 'ayamgoreng', // Password default agar mudah demo
-                );
-                // 2. Simpan ke daftar pelanggan dan otomatis pilih pelanggan tersebut
-                setState(() {
-                  CustomerModel.dummyCustomers.add(newCust);
-                  _selectedCustomer = newCust;
-                });
-                Navigator.pop(ctx);
-                ScaffoldMessenger.of(context).showSnackBar(
-                  SnackBar(backgroundColor: Colors.green, content: Text('Pelanggan $name berhasil didaftarkan!')),
-                );
-              }
-            },
-            child: const Text('Daftarkan'),
-          ),
-        ],
-      ),
+  // POPUP REGISTRASI PELANGGAN BARU, memakai dialog form yang sama dengan tab Pelanggan
+  Future<void> _showRegisterCustomerDialog() async {
+    // tunggu hasil pop dari dialog, berisi pelanggan baru atau null jika batal
+    final newCust = await showCustomerFormDialog(context);
+    if (newCust == null || !mounted) return;
+
+    // otomatis pilih pelanggan yang baru didaftarkan di dropdown
+    setState(() {
+      _selectedCustomer = newCust;
+    });
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(backgroundColor: Colors.green, content: Text('Pelanggan ${newCust.name} berhasil didaftarkan!')),
     );
   }
 
@@ -146,7 +98,8 @@ class _OrderEntryScreenState extends State<OrderEntryScreen> {
 
     _weightController.clear();
 
-    // feedback sukses ke admin
+    // feedback sukses ke admin, snackbar sebelumnya ditutup dulu agar tidak antre
+    ScaffoldMessenger.of(context).hideCurrentSnackBar();
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
         backgroundColor: Colors.green,
@@ -157,8 +110,6 @@ class _OrderEntryScreenState extends State<OrderEntryScreen> {
 
   @override
   void dispose() {
-    _newCustomerNameController.dispose();
-    _newCustomerPhoneController.dispose();
     _weightController.dispose();
     super.dispose();
   }
@@ -185,6 +136,9 @@ class _OrderEntryScreenState extends State<OrderEntryScreen> {
               children: [
                 Expanded(
                   child: DropdownButtonFormField<CustomerModel>(
+                    // key berubah saat pelanggan terpilih berubah, agar dropdown ikut menampilkan
+                    // pelanggan baru dari registrasi dan kosong lagi setelah pesanan disimpan
+                    key: ValueKey(_selectedCustomer?.id),
                     isExpanded: true, // teks panjang dipotong agar tidak overflow
                     initialValue: _selectedCustomer,
                     items: CustomerModel.dummyCustomers
@@ -221,6 +175,8 @@ class _OrderEntryScreenState extends State<OrderEntryScreen> {
             const Text('Pilih Layanan Laundry', style: TextStyle(fontWeight: FontWeight.bold)),
             const SizedBox(height: 8),
             DropdownButtonFormField<ServiceModel>(
+              // key berubah agar dropdown kosong lagi setelah pesanan disimpan
+              key: ValueKey(_selectedService?.id),
               isExpanded: true, // teks panjang dipotong agar tidak overflow
               initialValue: _selectedService,
               items: _availableServices.map((service) {
@@ -254,7 +210,8 @@ class _OrderEntryScreenState extends State<OrderEntryScreen> {
                 border: OutlineInputBorder(borderRadius: BorderRadius.circular(10)),
               ),
               onChanged: (value) {
-                _weight = double.tryParse(value) ?? 0.0;
+                // koma diganti titik karena keyboard indonesia memakai koma desimal (3,5)
+                _weight = double.tryParse(value.replaceAll(',', '.')) ?? 0.0;
                 _calculateTotal(); // hitung berat * harga
               },
             ),
@@ -349,7 +306,7 @@ class _OrderEntryScreenState extends State<OrderEntryScreen> {
                       order.customerName,
                       style: const TextStyle(fontWeight: FontWeight.bold),
                     ),
-                    subtitle: Text('${order.serviceName} • ${order.formattedWeight} (${order.status})'),
+                    subtitle: Text('${order.serviceName} • ${order.formattedWeight} (${order.statusLabel})'),
                     trailing: Text(
                       order.formattedTotalPrice,
                       style: const TextStyle(fontWeight: FontWeight.bold, color: Colors.blue),

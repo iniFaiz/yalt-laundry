@@ -72,10 +72,12 @@ class OrderDetailScreen extends StatelessWidget {
                       ),
                       const SizedBox(height: 6),
                       Text(
-                        // memanfaatkan getter isReadyForPickup dari order model
+                        // memanfaatkan getter isReadyForPickup & isCollected dari order model
                         order.isReadyForPickup
                             ? 'Tunjukkan QR ini ke kasir saat mengambil pakaian'
-                            : 'QR akan aktif diverifikasi saat cucian siap diambil',
+                            : order.isCollected
+                                ? 'QR sudah digunakan, cucian telah diambil'
+                                : 'QR akan aktif diverifikasi saat cucian siap diambil',
                         textAlign: TextAlign.center,
                         style: TextStyle(
                           fontSize: 12,

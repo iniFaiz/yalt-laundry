@@ -111,4 +111,48 @@ void main() {
     expect(find.text('Gibran'), findsOneWidget);
     expect(find.text('085700000001 • 0 pesanan'), findsOneWidget);
   });
+
+  testWidgets('Kasir POS registrasi pelanggan baru lalu langsung buat pesanan', (WidgetTester tester) async {
+    await tester.pumpWidget(const MyApp());
+    await tester.pumpAndSettle();
+
+    await _login(tester, '081111111111', 'ayamgoreng');
+
+    // buka dialog registrasi dari tab Kasir POS (dialog yang sama dengan tab Pelanggan)
+    await tester.tap(find.byTooltip('Registrasi Pelanggan Baru'));
+    await tester.pumpAndSettle();
+    await tester.enterText(find.byType(TextFormField).at(0), 'Kaesang');
+
+    // nomor hp yang sudah dipakai pelanggan lain ditolak
+    await tester.enterText(find.byType(TextFormField).at(1), '081234567890');
+    await tester.tap(find.text('Simpan'));
+    await tester.pumpAndSettle();
+    expect(find.text('Nomor HP sudah terdaftar'), findsOneWidget);
+
+    // nomor hp baru tersimpan dan pelanggan langsung terpilih di dropdown
+    await tester.enterText(find.byType(TextFormField).at(1), '085700000002');
+    await tester.tap(find.text('Simpan'));
+    await tester.pumpAndSettle();
+    expect(find.text('Kaesang (085700000002)'), findsOneWidget);
+
+    // pilih layanan dan isi berat
+    await tester.tap(find.text('Pilih Layanan'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Cuci Kering (Rp 6.000 / kg)').last);
+    await tester.pumpAndSettle();
+    await tester.enterText(find.widgetWithText(TextField, 'Contoh: 3.5'), '2');
+    await tester.pumpAndSettle();
+    // total dicek di kotak Total Tagihan saja (pesanan lama ORD-002 juga Rp 12.000)
+    final totalRow = find.ancestor(of: find.text('Total Tagihan:'), matching: find.byType(Row));
+    expect(find.descendant(of: totalRow, matching: find.text('Rp 12.000')), findsOneWidget);
+
+    // simpan pesanan, form kembali kosong
+    final submitButton = find.text('Buat Pesanan & Cetak Bukti');
+    await tester.ensureVisible(submitButton);
+    await tester.tap(submitButton);
+    await tester.pumpAndSettle();
+    expect(find.text('Pesanan untuk "Kaesang" berhasil dibuat!'), findsOneWidget);
+    expect(find.text('-- Pilih Pelanggan --'), findsOneWidget);
+    expect(find.text('Pilih Layanan'), findsOneWidget);
+  });
 }

@@ -133,7 +133,7 @@ class _OrderMonitoringScreenState extends State<OrderMonitoringScreen> {
       _showScanResultDialog(
         success: false,
         title: 'Cucian Belum Siap!',
-        message: 'Pesanan masih berstatus "${order.status.toUpperCase()}". Belum siap diambil.',
+        message: 'Pesanan masih berstatus "${order.statusLabel}". Belum siap diambil.',
       );
     } else {
       // berhasil diverifikasi, ubah status menjadi diambil
@@ -339,7 +339,14 @@ class _OrderMonitoringScreenState extends State<OrderMonitoringScreen> {
 
   Widget _buildOrderList(List<OrderModel> orders, {required bool isActiveList}) {
     if (orders.isEmpty) {
-      return const Center(child: Text('Tidak ada pesanan'));
+      // dibungkus ListView agar tetap bisa ditarik untuk refresh
+      return ListView(
+        physics: const AlwaysScrollableScrollPhysics(),
+        children: const [
+          SizedBox(height: 120),
+          Center(child: Text('Tidak ada pesanan')),
+        ],
+      );
     }
 
     return ListView.builder(
@@ -373,7 +380,8 @@ class _OrderMonitoringScreenState extends State<OrderMonitoringScreen> {
                         border: Border.all(color: statusColor),
                       ),
                       child: Text(
-                        order.status.toUpperCase(),
+                        // menggunakan getter statusLabel dari model
+                        order.statusLabel,
                         style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: statusColor),
                       ),
                     ),

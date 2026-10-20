@@ -380,7 +380,13 @@ class _CustomerHomeScreenState extends State<CustomerHomeScreen> with WidgetsBin
   // tab riwayat
   Widget _buildHistoryTab(List<OrderModel> pastOrders) {
     if (pastOrders.isEmpty) {
-      return _buildEmptyState('Belum ada riwayat pesanan yang selesai.', Icons.history_rounded);
+      // dibungkus ListView agar tetap bisa ditarik untuk refresh
+      return ListView(
+        physics: const AlwaysScrollableScrollPhysics(),
+        children: [
+          _buildEmptyState('Belum ada riwayat pesanan yang selesai.', Icons.history_rounded),
+        ],
+      );
     }
 
     return ListView(
@@ -401,28 +407,23 @@ class _CustomerHomeScreenState extends State<CustomerHomeScreen> with WidgetsBin
   Widget _buildModernOrderCard(OrderModel order, {required bool isActive}) {
     Color statusBg;
     Color statusTextColor;
-    String statusLabel;
 
     switch (order.status) {
       case 'diterima':
         statusBg = const Color(0xFFE3F2FD);
         statusTextColor = const Color(0xFF1976D2);
-        statusLabel = 'Diterima';
         break;
       case 'dicuci':
         statusBg = const Color(0xFFFFF3E0);
         statusTextColor = const Color(0xFFE65100);
-        statusLabel = 'Sedang Dicuci';
         break;
       case 'siap_diambil':
         statusBg = const Color(0xFFE8F5E9);
         statusTextColor = const Color(0xFF2E7D32);
-        statusLabel = 'Siap Diambil';
         break;
       default:
         statusBg = const Color(0xFFF5F5F5);
         statusTextColor = Colors.black54;
-        statusLabel = 'Selesai';
     }
 
     return Container(
@@ -468,8 +469,9 @@ class _CustomerHomeScreenState extends State<CustomerHomeScreen> with WidgetsBin
                         color: statusBg,
                         borderRadius: BorderRadius.circular(8),
                       ),
+                      // menggunakan getter statusLabel dari model
                       child: Text(
-                        statusLabel,
+                        order.statusLabel,
                         style: TextStyle(color: statusTextColor, fontSize: 12, fontWeight: FontWeight.bold),
                       ),
                     ),

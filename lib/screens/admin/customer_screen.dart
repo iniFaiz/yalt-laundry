@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import '../../models/customer_model.dart';
 import '../../models/order_model.dart';
+import '../../widgets/customer_form_dialog.dart';
 
 class CustomerScreen extends StatefulWidget {
   const CustomerScreen({super.key});
@@ -11,13 +12,6 @@ class CustomerScreen extends StatefulWidget {
 
 class _CustomerScreenState extends State<CustomerScreen> {
   bool _isLoading = false;
-
-  // controller untuk form tambah / ubah pelanggan
-  final TextEditingController _nameController = TextEditingController();
-  final TextEditingController _phoneController = TextEditingController();
-
-  // key form untuk menjalankan validasi input
-  final _formKey = GlobalKey<FormState>();
 
   // inisialisasi awal saat halaman pelanggan dibuka (lifecycle on start)
   @override
@@ -35,14 +29,6 @@ class _CustomerScreenState extends State<CustomerScreen> {
     }
   }
 
-  @override
-  void dispose() {
-    // controller dibersihkan agar tidak memory leak
-    _nameController.dispose();
-    _phoneController.dispose();
-    super.dispose();
-  }
-
   // getter daftar akun dengan role pelanggan saja (admin tidak ditampilkan)
   List<CustomerModel> get _customers =>
       CustomerModel.dummyCustomers.where((c) => c.role == 'Customer').toList();
@@ -52,104 +38,20 @@ class _CustomerScreenState extends State<CustomerScreen> {
     return OrderModel.dummyOrders.where((o) => o.customerPhone == customer.phone).length;
   }
 
-  // untuk memunculkan Modal Popup Tambah / Ubah Pelanggan
-  // customer bernilai null berarti mode tambah, selain itu mode ubah
-  void _showCustomerDialog({CustomerModel? customer}) {
-    final isEdit = customer != null;
-    // nomor hp dikunci jika pelanggan sudah punya pesanan agar riwayat tetap terhubung
-    final isPhoneLocked = isEdit && _countOrders(customer) > 0;
+  // buka dialog form pelanggan bersama (mode tambah jika customer null, selain itu mode ubah)
+  Future<void> _openCustomerForm({CustomerModel? customer}) async {
+    // tunggu hasil pop dari dialog, berisi pelanggan yang disimpan atau null jika batal
+    final saved = await showCustomerFormDialog(context, customer: customer);
+    if (saved == null || !mounted) return;
 
-    // isi form dengan data lama memakai getter, atau kosongkan untuk data baru
-    _nameController.text = customer?.name ?? '';
-    _phoneController.text = customer?.phone ?? '';
-
-    showDialog(
-      context: context,
-      builder: (ctx) => AlertDialog(
-        title: Text(isEdit ? 'Ubah Data Pelanggan' : 'Tambah Pelanggan Baru'),
-        content: Form(
-          key: _formKey,
-          child: Column(
-            mainAxisSize: MainAxisSize.min, // agar tinggi modal pas dengan isi
-            children: [
-              TextFormField(
-                controller: _nameController,
-                decoration: const InputDecoration(
-                  labelText: 'Nama Lengkap',
-                  prefixIcon: Icon(Icons.person),
-                ),
-                // validasi nama memakai fungsi dari model
-                validator: (value) => CustomerModel.validateName(value ?? ''),
-              ),
-              const SizedBox(height: 12),
-              TextFormField(
-                controller: _phoneController,
-                enabled: !isPhoneLocked,
-                keyboardType: TextInputType.phone,
-                decoration: InputDecoration(
-                  labelText: 'Nomor HP / WhatsApp',
-                  prefixIcon: const Icon(Icons.phone),
-                  hintText: '08...',
-                  helperText: isPhoneLocked
-                      ? 'Nomor HP terkunci karena sudah ada pesanan'
-                      : (isEdit ? null : 'Password default: ayamgoreng'),
-                ),
-                validator: (value) {
-                  final phone = value ?? '';
-                  final error = CustomerModel.validatePhone(phone);
-                  if (error != null) return error;
-                  // cek nomor hp tidak boleh sama dengan akun lain
-                  if (CustomerModel.isPhoneRegistered(phone, except: customer)) {
-                    return 'Nomor HP sudah terdaftar';
-                  }
-                  return null;
-                },
-              ),
-            ],
-          ),
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(ctx),
-            child: const Text('Batal'),
-          ),
-          ElevatedButton(
-            onPressed: () {
-              // hentikan proses jika ada input yang tidak valid
-              if (!_formKey.currentState!.validate()) return;
-
-              final name = _nameController.text.trim();
-              final phone = _phoneController.text.trim();
-
-              setState(() {
-                if (isEdit) {
-                  // ubah data lewat setter model
-                  customer.name = name;
-                  customer.phone = phone;
-                } else {
-                  // nambah pelanggan baru ke daftar
-                  CustomerModel.dummyCustomers.add(
-                    CustomerModel(
-                      id: 'CUST-${DateTime.now().millisecondsSinceEpoch.toString().substring(8)}',
-                      name: name,
-                      phone: phone,
-                    ),
-                  );
-                }
-              });
-              Navigator.pop(ctx);
-              ScaffoldMessenger.of(context).showSnackBar(
-                SnackBar(
-                  backgroundColor: Colors.green,
-                  content: Text(isEdit
-                      ? 'Data pelanggan $name berhasil diperbarui!'
-                      : 'Pelanggan $name berhasil didaftarkan!'),
-                ),
-              );
-            },
-            child: const Text('Simpan'),
-          ),
-        ],
+    // panggil setState biar ListView terupdate
+    setState(() {});
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        backgroundColor: Colors.green,
+        content: Text(customer != null
+            ? 'Data pelanggan ${saved.name} berhasil diperbarui!'
+            : 'Pelanggan ${saved.name} berhasil didaftarkan!'),
       ),
     );
   }
@@ -209,7 +111,7 @@ class _CustomerScreenState extends State<CustomerScreen> {
       ),
       // tombol mengambang untuk tambah data
       floatingActionButton: FloatingActionButton.extended(
-        onPressed: () => _showCustomerDialog(),
+        onPressed: () => _openCustomerForm(),
         icon: const Icon(Icons.person_add),
         label: const Text('Tambah Pelanggan'),
       ),
@@ -228,7 +130,7 @@ class _CustomerScreenState extends State<CustomerScreen> {
                       margin: const EdgeInsets.only(bottom: 12),
                       child: ListTile(
                         // ketuk kartu untuk ubah data pelanggan
-                        onTap: () => _showCustomerDialog(customer: customer),
+                        onTap: () => _openCustomerForm(customer: customer),
                         leading: CircleAvatar(
                           backgroundColor: Colors.blue.shade100,
                           child: Text(
