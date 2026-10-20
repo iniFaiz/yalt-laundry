@@ -80,6 +80,8 @@ class _CustomerFormDialogState extends State<CustomerFormDialog> {
   @override
   Widget build(BuildContext context) {
     return AlertDialog(
+      // isi dialog bisa di-scroll agar form tetap terlihat saat keyboard muncul (terutama landscape)
+      scrollable: true,
       title: Text(_isEdit ? 'Ubah Data Pelanggan' : 'Registrasi Pelanggan Baru'),
       content: Form(
         key: _formKey,

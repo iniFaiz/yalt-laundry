@@ -51,6 +51,8 @@ class _ServiceScreenState extends State<ServiceScreen> {
     final newService = await showDialog<ServiceModel>(
       context: context,
       builder: (ctx) => AlertDialog(
+        // isi dialog bisa di-scroll agar form tetap terlihat saat keyboard muncul (terutama landscape)
+        scrollable: true,
         title: const Text('Tambah Layanan Baru'),
         content: _buildServiceForm('Nama Layanan (misal: Cuci Bedcover)'),
         actions: [
@@ -99,6 +101,8 @@ class _ServiceScreenState extends State<ServiceScreen> {
     showDialog(
       context: context,
       builder: (ctx) => AlertDialog(
+        // isi dialog bisa di-scroll agar form tetap terlihat saat keyboard muncul (terutama landscape)
+        scrollable: true,
         title: const Text('Ubah Layanan'),
         content: _buildServiceForm('Nama Layanan'),
         actions: [
