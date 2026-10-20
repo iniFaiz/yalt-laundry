@@ -79,7 +79,7 @@ class OrderDetailScreen extends StatelessWidget {
                       ),
                       const SizedBox(height: 16),
                       
-                      // QR Image via Image.network dengan ukuran responsif
+                      // QR Image via Image.asset sebagai placeholder offline (tidak butuh internet)
                       Container(
                         width: qrBoxSize,
                         height: qrBoxSize,
@@ -88,14 +88,10 @@ class OrderDetailScreen extends StatelessWidget {
                           border: Border.all(color: Colors.grey.shade300),
                           borderRadius: BorderRadius.circular(12),
                         ),
-                        child: Image.network(
-                          'https://api.qrserver.com/v1/create-qr-code/?size=200x200&data=${order.pickupToken}',
-                          loadingBuilder: (context, child, loadingProgress) {
-                            if (loadingProgress == null) return child;
-                            return const Center(child: CircularProgressIndicator());
-                          },
+                        child: Image.asset(
+                          'assets/images/qr_placeholder.png',
+                          fit: BoxFit.contain,
                           errorBuilder: (context, error, stackTrace) {
-                            // Fallback jika tidak ada koneksi internet
                             return Column(
                               mainAxisAlignment: MainAxisAlignment.center,
                               children: [
