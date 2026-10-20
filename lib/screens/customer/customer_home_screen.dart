@@ -4,6 +4,7 @@ import '../../models/customer_model.dart';
 import '../../models/service_model.dart';
 import '../login_screen.dart';
 import 'order_detail_screen.dart';
+import 'profile_screen.dart';
 
 class CustomerHomeScreen extends StatefulWidget {
   final CustomerModel customer;
@@ -172,12 +173,15 @@ class _CustomerHomeScreenState extends State<CustomerHomeScreen> with WidgetsBin
       // tampilkan loading indicator jika proses asinkron awal masih berjalan
       body: _isLoading
           ? const Center(child: CircularProgressIndicator())
-          : RefreshIndicator(
-              onRefresh: _handleRefresh,
-              child: _currentIndex == 0
-                  ? _buildHomeTab(activeOrders)
-                  : _buildHistoryTab(pastOrders),
-            ),
+          // tab profil tidak perlu tarik untuk refresh
+          : _currentIndex == 2
+              ? ProfileScreen(customer: widget.customer)
+              : RefreshIndicator(
+                  onRefresh: _handleRefresh,
+                  child: _currentIndex == 0
+                      ? _buildHomeTab(activeOrders)
+                      : _buildHistoryTab(pastOrders),
+                ),
 
       // bottom navigation bar material 3
       bottomNavigationBar: Container(
@@ -210,6 +214,11 @@ class _CustomerHomeScreenState extends State<CustomerHomeScreen> with WidgetsBin
               icon: Icon(Icons.receipt_long_outlined),
               selectedIcon: Icon(Icons.receipt_long_rounded, color: Color(0xFF007BFF)),
               label: 'Riwayat Pesanan',
+            ),
+            NavigationDestination(
+              icon: Icon(Icons.person_outline),
+              selectedIcon: Icon(Icons.person, color: Color(0xFF007BFF)),
+              label: 'Profil',
             ),
           ],
         ),

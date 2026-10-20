@@ -2,14 +2,14 @@ class CustomerModel {
   final String id;
   String _name; // private, diubah lewat setter
   String _phone; // private, diubah lewat setter
-  final String password;
+  String _password; // private, diubah lewat setter
   final String role; // 'Customer' atau 'Admin'
 
   CustomerModel({
     required this.id,
     required this._name, // dipanggil dengan nama parameter name
     required this._phone, // dipanggil dengan nama parameter phone
-    this.password = 'ayamgoreng',
+    this._password = 'ayamgoreng', // dipanggil dengan nama parameter password
     this.role = 'Customer',
   });
 
@@ -35,6 +35,32 @@ class CustomerModel {
       throw ArgumentError(error);
     }
     _phone = value.trim();
+  }
+
+  // getter password akun
+  String get password => _password;
+
+  // setter password akun, divalidasi dulu sebelum disimpan
+  set password(String value) {
+    final error = validatePassword(value);
+    if (error != null) {
+      throw ArgumentError(error);
+    }
+    _password = value;
+  }
+
+  // validasi password baru, minimal 6 karakter tanpa spasi
+  static String? validatePassword(String value) {
+    if (value.isEmpty) {
+      return 'Password tidak boleh kosong';
+    }
+    if (value.length < 6) {
+      return 'Password minimal 6 karakter';
+    }
+    if (value.contains(' ')) {
+      return 'Password tidak boleh mengandung spasi';
+    }
+    return null;
   }
 
   // validasi nama, return pesan error atau null jika valid

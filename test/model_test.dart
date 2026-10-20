@@ -74,6 +74,16 @@ void main() {
       expect(customer.phone, '081200000000');
     });
 
+    test('password default bisa diganti lewat setter, password tidak valid ditolak', () {
+      final customer = CustomerModel(id: 'C1', name: 'Budi', phone: '081200000000');
+      expect(customer.password, 'ayamgoreng');
+      customer.password = 'rahasia123';
+      expect(customer.password, 'rahasia123');
+      expect(() => customer.password = '12345', throwsArgumentError);
+      expect(() => customer.password = 'ada spasi', throwsArgumentError);
+      expect(customer.password, 'rahasia123');
+    });
+
     test('nomor hp yang sudah dipakai akun lain terdeteksi', () {
       final prabowo = CustomerModel.dummyCustomers.firstWhere((c) => c.phone == '081234567890');
       expect(CustomerModel.isPhoneRegistered('081234567890'), isTrue);

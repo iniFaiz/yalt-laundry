@@ -1,6 +1,6 @@
 <mxfile host="Electron">
   <diagram id="yalt_Use Case YALT" name="Use Case YALT">
-    <mxGraphModel dx="2151" dy="1269" grid="0" gridSize="10" guides="1" tooltips="1" connect="1" arrows="1" fold="1" page="1" pageScale="1" pageWidth="1300" pageHeight="1260" background="#ffffff" math="0" shadow="0">
+    <mxGraphModel dx="2330" dy="1375" grid="0" gridSize="10" guides="1" tooltips="1" connect="1" arrows="1" fold="1" page="1" pageScale="1" pageWidth="1300" pageHeight="1260" background="#ffffff" math="0" shadow="0">
       <root>
         <mxCell id="0" />
         <mxCell id="1" parent="0" />
@@ -29,7 +29,7 @@
           <mxGeometry height="88" width="270" x="60" y="870" as="geometry" />
         </mxCell>
         <mxCell id="uc_active" parent="system" style="html=1;fontFamily=Helvetica;fontColor=#111111;strokeColor=#111111;ellipse;whiteSpace=wrap;fillColor=#ffffff;strokeWidth=1.6;fontSize=17;align=center;verticalAlign=middle;spacing=8;" value="Melihat Status Pesanan" vertex="1">
-          <mxGeometry height="88" width="270" x="570" y="320" as="geometry" />
+          <mxGeometry height="88" width="270" x="565" y="315" as="geometry" />
         </mxCell>
         <mxCell id="uc_receipt" parent="system" style="html=1;fontFamily=Helvetica;fontColor=#111111;strokeColor=#111111;ellipse;whiteSpace=wrap;fillColor=#ffffff;strokeWidth=1.6;fontSize=17;align=center;verticalAlign=middle;spacing=8;" value="Melihat struk digital&#xa;dan total biaya" vertex="1">
           <mxGeometry height="88" width="270" x="570" y="590" as="geometry" />
@@ -43,8 +43,16 @@
         <mxCell id="uc_view_orders" parent="system" style="html=1;fontFamily=Helvetica;fontColor=#111111;strokeColor=#111111;ellipse;whiteSpace=wrap;fillColor=#ffffff;strokeWidth=1.6;fontSize=17;align=center;verticalAlign=middle;spacing=8;" value="Melihat daftar dan&lt;br&gt;detail semua pesanan" vertex="1">
           <mxGeometry height="88" width="270" x="60" y="650" as="geometry" />
         </mxCell>
+        <mxCell id="w3KwY_rUk8UWGfPKArHf-1" parent="system" style="html=1;fontFamily=Helvetica;fontColor=#111111;strokeColor=#111111;ellipse;whiteSpace=wrap;fillColor=#ffffff;strokeWidth=1.6;fontSize=17;align=center;verticalAlign=middle;spacing=8;" value="Ubah password" vertex="1">
+          <mxGeometry height="108" width="272" x="574" y="445" as="geometry" />
+        </mxCell>
         <mxCell id="actor_admin" parent="1" style="html=1;fontFamily=Helvetica;fontColor=#111111;strokeColor=#111111;shape=umlActor;verticalLabelPosition=bottom;verticalAlign=top;align=center;fillColor=#ffffff;strokeWidth=1.8;fontSize=18;" value="Admin" vertex="1">
           <mxGeometry height="105" width="60" x="50" y="210" as="geometry" />
+        </mxCell>
+        <mxCell id="w3KwY_rUk8UWGfPKArHf-2" edge="1" parent="1" style="edgeStyle=SimpleStyle&#xa;;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;shape=wire;dashed=1;endArrow=none;endFill=0;" target="w3KwY_rUk8UWGfPKArHf-1">
+          <mxGeometry relative="1" as="geometry">
+            <mxPoint x="1191" y="258" as="sourcePoint" />
+          </mxGeometry>
         </mxCell>
         <mxCell id="actor_customer" parent="1" style="html=1;fontFamily=Helvetica;fontColor=#111111;strokeColor=#111111;shape=umlActor;verticalLabelPosition=bottom;verticalAlign=top;align=center;fillColor=#ffffff;strokeWidth=1.8;fontSize=18;" value="Pelanggan" vertex="1">
           <mxGeometry height="105" width="60" x="1190" y="210" as="geometry" />

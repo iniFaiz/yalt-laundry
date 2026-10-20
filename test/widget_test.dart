@@ -155,4 +155,52 @@ void main() {
     expect(find.text('-- Pilih Pelanggan --'), findsOneWidget);
     expect(find.text('Pilih Layanan'), findsOneWidget);
   });
+
+  testWidgets('Pelanggan ganti password di tab Profil lalu login dengan password baru', (WidgetTester tester) async {
+    await tester.pumpWidget(const MyApp());
+    await tester.pumpAndSettle();
+
+    await _login(tester, '089876543210', 'ayamgoreng');
+
+    // buka tab profil
+    await tester.tap(find.text('Profil'));
+    await tester.pumpAndSettle();
+    expect(find.text('Ganti Password'), findsOneWidget);
+    expect(find.text('CUST-02'), findsOneWidget);
+
+    final saveButton = find.text('Simpan Password Baru');
+
+    // password lama salah dan konfirmasi tidak sama memunculkan pesan validasi
+    await tester.enterText(find.byType(TextFormField).at(0), 'salah123');
+    await tester.enterText(find.byType(TextFormField).at(1), 'rahasia123');
+    await tester.enterText(find.byType(TextFormField).at(2), 'rahasia999');
+    await tester.ensureVisible(saveButton);
+    await tester.tap(saveButton);
+    await tester.pumpAndSettle();
+    expect(find.text('Password lama salah'), findsOneWidget);
+    expect(find.text('Konfirmasi password tidak sama'), findsOneWidget);
+
+    // input benar, password tersimpan dan form kosong lagi
+    await tester.enterText(find.byType(TextFormField).at(0), 'ayamgoreng');
+    await tester.enterText(find.byType(TextFormField).at(2), 'rahasia123');
+    await tester.ensureVisible(saveButton);
+    await tester.tap(saveButton);
+    await tester.pumpAndSettle();
+    expect(
+      find.text('Password berhasil diubah. Gunakan password baru saat login berikutnya.'),
+      findsOneWidget,
+    );
+
+    // logout, password lama ditolak dan password baru diterima
+    await tester.tap(find.byTooltip('Keluar'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.widgetWithText(ElevatedButton, 'Keluar'));
+    await tester.pumpAndSettle();
+
+    await _login(tester, '089876543210', 'ayamgoreng');
+    expect(find.text('Nomor HP atau password salah'), findsOneWidget);
+
+    await _login(tester, '089876543210', 'rahasia123');
+    expect(find.text('Halo, Jokowi 👋'), findsOneWidget);
+  });
 }
