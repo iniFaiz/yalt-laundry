@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import '../../models/order_model.dart';
 import '../../models/customer_model.dart';
 import '../../models/service_model.dart';
+import '../../repositories/auth_repository.dart';
 import '../login_screen.dart';
 import 'order_detail_screen.dart';
 import 'profile_screen.dart';
@@ -102,8 +103,11 @@ class _CustomerHomeScreenState extends State<CustomerHomeScreen> with WidgetsBin
               foregroundColor: Colors.white,
               shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
             ),
-            onPressed: () {
+            onPressed: () async {
               Navigator.pop(ctx);
+              // hapus sesi Supabase Auth, lalu kembali ke login
+              await AuthRepository.instance.signOut();
+              if (!mounted) return;
               // kembali ke login pakai push dan hapus tumpukan halaman
               Navigator.pushAndRemoveUntil(
                 context,

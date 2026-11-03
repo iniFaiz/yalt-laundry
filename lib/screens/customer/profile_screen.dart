@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import '../../models/customer_model.dart';
 import '../../models/order_model.dart';
+import '../../repositories/auth_repository.dart';
 
 /// Halaman profil pelanggan, ditampilkan sebagai tab ketiga di beranda pelanggan.
 /// Berisi data akun dan form ganti password.
@@ -27,6 +28,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
   bool _obscureConfirm = true;
 
   bool _isSaving = false; // status loading saat proses simpan asinkron
+  String? _oldPasswordError; // pesan dari server jika password lama salah
 
   @override
   void dispose() {
@@ -41,19 +43,42 @@ class _ProfileScreenState extends State<ProfileScreen> {
   Future<void> _changePassword() async {
     // tutup keyboard lalu hentikan proses jika ada input yang tidak valid
     FocusScope.of(context).unfocus();
+    _oldPasswordError = null;
     if (!_formKey.currentState!.validate()) return;
 
     setState(() {
       _isSaving = true;
     });
 
-    // simulasi request penyimpanan password ke server
-    await Future.delayed(const Duration(milliseconds: 600));
+    // cek password lama lalu simpan password baru di Supabase Auth
+    try {
+      await AuthRepository.instance.changePassword(
+        widget.customer.phone,
+        _oldPasswordController.text,
+        _newPasswordController.text,
+      );
+    } catch (e) {
+      debugPrint('Ganti password gagal: $e');
+      if (!mounted) return;
+      setState(() => _isSaving = false);
+      if (e is AuthFailure) {
+        // tampilkan pesan di bawah kolom password lama
+        _oldPasswordError = e.message;
+        _formKey.currentState!.validate();
+      } else {
+        ScaffoldMessenger.of(context).hideCurrentSnackBar();
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            backgroundColor: Colors.red,
+            content: Text('Gagal mengubah password. Periksa koneksi internet lalu coba lagi.'),
+          ),
+        );
+      }
+      return;
+    }
     if (!mounted) return;
 
     setState(() {
-      // ubah password lewat setter model
-      widget.customer.password = _newPasswordController.text;
       _isSaving = false;
     });
 
@@ -139,9 +164,8 @@ class _ProfileScreenState extends State<ProfileScreen> {
                   onToggle: () => setState(() => _obscureOld = !_obscureOld),
                   validator: (value) {
                     if ((value ?? '').isEmpty) return 'Password lama tidak boleh kosong';
-                    // cocokkan dengan password akun memakai getter
-                    if (value != customer.password) return 'Password lama salah';
-                    return null;
+                    // hasil pengecekan password lama dari server (jika salah)
+                    return _oldPasswordError;
                   },
                 ),
                 const SizedBox(height: 12),

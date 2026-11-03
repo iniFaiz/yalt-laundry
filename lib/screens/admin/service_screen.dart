@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
+
 import '../../models/service_model.dart';
+import '../../repositories/service_repository.dart';
 
 class ServiceScreen extends StatefulWidget {
   const ServiceScreen({super.key});
@@ -9,10 +11,14 @@ class ServiceScreen extends StatefulWidget {
 }
 
 class _ServiceScreenState extends State<ServiceScreen> {
-  // ambil data dummy layanan yang dipakai bersama
+  final ServiceRepository _repository = ServiceRepository();
+
+  // list layanan yang dipakai bersama halaman lain, isinya diganti dengan data dari API
   final List<ServiceModel> _services = ServiceModel.dummyServices;
 
-  bool _isLoading = false;
+  bool _isLoading = true;
+  bool _isSaving = false; // true saat menunggu respon simpan dari API
+  String? _errorMessage;
 
   // inisialisasi awal saat halaman layanan dibuka (lifecycle on start)
   @override
@@ -21,13 +27,32 @@ class _ServiceScreenState extends State<ServiceScreen> {
     _loadServices();
   }
 
-  // simulasi memuat data master layanan secara asinkron
+  // ambil data master layanan dari Supabase (GET /rest/v1/services)
   Future<void> _loadServices() async {
-    setState(() => _isLoading = true);
-    await Future.delayed(const Duration(milliseconds: 400));
-    if (mounted) {
-      setState(() => _isLoading = false);
+    try {
+      final services = await _repository.fetchServices();
+      if (!mounted) return;
+      setState(() {
+        _services
+          ..clear()
+          ..addAll(services);
+        _errorMessage = null;
+        _isLoading = false;
+      });
+    } catch (e) {
+      debugPrint('Gagal memuat layanan: $e');
+      if (!mounted) return;
+      setState(() {
+        _errorMessage = 'Gagal memuat layanan. Periksa koneksi internet lalu coba lagi.';
+        _isLoading = false;
+      });
     }
+  }
+
+  // tombol "Coba Lagi" pada tampilan error
+  void _retry() {
+    setState(() => _isLoading = true);
+    _loadServices();
   }
 
   // controller untuk dialog tambah layanan
@@ -42,93 +67,99 @@ class _ServiceScreenState extends State<ServiceScreen> {
     super.dispose();
   }
 
-  // untuk memunculkan Modal Popup Tambah Layanan
+  // jalankan request simpan ke API, tampilkan pesan sukses / gagal
+  Future<void> _save(Future<void> Function() request, String successMessage) async {
+    setState(() => _isSaving = true);
+    String message = successMessage;
+    bool success = true;
+    try {
+      await request();
+    } catch (e) {
+      debugPrint('Gagal menyimpan layanan: $e');
+      message = ServiceRepository.errorMessage(e);
+      success = false;
+    }
+    if (!mounted) return;
+    setState(() => _isSaving = false);
+    ScaffoldMessenger.of(context).hideCurrentSnackBar();
+    ScaffoldMessenger.of(context)
+        .showSnackBar(SnackBar(backgroundColor: success ? Colors.green : Colors.red, content: Text(message)));
+  }
+
+  // dialog form nama & tarif, hasil pop berisi (nama, tarif) atau null jika batal
+  Future<(String, double)?> _showServiceDialog({required String title, required String nameLabel}) {
+    return showDialog<(String, double)>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        // isi dialog bisa di-scroll agar form tetap terlihat saat keyboard muncul (terutama landscape)
+        scrollable: true,
+        title: Text(title),
+        content: _buildServiceForm(nameLabel),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('Batal')),
+          ElevatedButton(
+            onPressed: () {
+              final name = _nameController.text.trim();
+              final price = double.tryParse(_priceController.text) ?? 0.0;
+
+              if (name.isNotEmpty && price > 0) {
+                // kirim isian form ke halaman pemanggil lewat hasil pop
+                Navigator.pop(ctx, (name, price));
+              }
+            },
+            child: const Text('Simpan'),
+          ),
+        ],
+      ),
+    );
+  }
+
+  // untuk memunculkan Modal Popup Tambah Layanan, lalu simpan ke Supabase
   Future<void> _showAddServiceDialog() async {
     _nameController.clear();
     _priceController.clear();
 
-    // tunggu hasil pop dari dialog, berisi layanan baru atau null jika batal
-    final newService = await showDialog<ServiceModel>(
-      context: context,
-      builder: (ctx) => AlertDialog(
-        // isi dialog bisa di-scroll agar form tetap terlihat saat keyboard muncul (terutama landscape)
-        scrollable: true,
-        title: const Text('Tambah Layanan Baru'),
-        content: _buildServiceForm('Nama Layanan (misal: Cuci Bedcover)'),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(ctx),
-            child: const Text('Batal'),
-          ),
-          ElevatedButton(
-            onPressed: () {
-              final name = _nameController.text.trim();
-              final price = double.tryParse(_priceController.text) ?? 0.0;
-
-              if (name.isNotEmpty && price > 0) {
-                // kirim data layanan baru ke halaman pemanggil lewat hasil pop
-                Navigator.pop(
-                  ctx,
-                  ServiceModel(
-                    id: DateTime.now().millisecondsSinceEpoch.toString(),
-                    name: name,
-                    pricePerKG: price,
-                    isActive: true,
-                  ),
-                );
-              }
-            },
-            child: const Text('Simpan'),
-          ),
-        ],
-      ),
+    final input = await _showServiceDialog(
+      title: 'Tambah Layanan Baru',
+      nameLabel: 'Nama Layanan (misal: Cuci Bedcover)',
     );
+    if (input == null || !mounted) return;
 
-    // nambah data baru lalu panggil setState biar ListView terupdate
-    if (newService != null && mounted) {
-      setState(() {
-        _services.add(newService);
-      });
-    }
+    await _save(() async {
+      final newService = await _repository.addService(input.$1, input.$2);
+      // tambah hasil dari server lalu setState biar ListView terupdate
+      setState(() => _services.add(newService));
+    }, 'Layanan "${input.$1}" berhasil ditambahkan');
   }
 
-  // untuk memunculkan Modal Popup Edit Nama & Tarif Layanan
-  void _showEditServiceDialog(ServiceModel service) {
+  // untuk memunculkan Modal Popup Edit Nama & Tarif Layanan, lalu simpan ke Supabase
+  Future<void> _showEditServiceDialog(ServiceModel service) async {
     // isi form dengan data lama memakai getter
     _nameController.text = service.name;
     _priceController.text = service.pricePerKG.toStringAsFixed(0);
 
-    showDialog(
-      context: context,
-      builder: (ctx) => AlertDialog(
-        // isi dialog bisa di-scroll agar form tetap terlihat saat keyboard muncul (terutama landscape)
-        scrollable: true,
-        title: const Text('Ubah Layanan'),
-        content: _buildServiceForm('Nama Layanan'),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(ctx),
-            child: const Text('Batal'),
-          ),
-          ElevatedButton(
-            onPressed: () {
-              final name = _nameController.text.trim();
-              final price = double.tryParse(_priceController.text) ?? 0.0;
+    final input = await _showServiceDialog(title: 'Ubah Layanan', nameLabel: 'Nama Layanan');
+    if (input == null || !mounted) return;
 
-              if (name.isNotEmpty && price > 0) {
-                // ubah data lewat setter model, lalu setState biar ListView terupdate
-                setState(() {
-                  service.name = name;
-                  service.pricePerKG = price;
-                });
-                Navigator.pop(ctx);
-              }
-            },
-            child: const Text('Simpan'),
-          ),
-        ],
-      ),
-    );
+    await _save(() async {
+      final updated = await _repository.updateService(service.id, name: input.$1, pricePerKG: input.$2);
+      _replaceService(updated);
+    }, 'Layanan "${input.$1}" berhasil diubah');
+  }
+
+  // aktifkan / nonaktifkan layanan tanpa menghapus data
+  Future<void> _toggleActive(ServiceModel service, bool isActive) async {
+    await _save(() async {
+      final updated = await _repository.updateService(service.id, isActive: isActive);
+      _replaceService(updated);
+    }, isActive ? 'Layanan "${service.name}" diaktifkan' : 'Layanan "${service.name}" dinonaktifkan');
+  }
+
+  // ganti data layanan di list dengan hasil terbaru dari server
+  void _replaceService(ServiceModel updated) {
+    final index = _services.indexWhere((s) => s.id == updated.id);
+    if (index == -1) return;
+    setState(() => _services[index] = updated);
   }
 
   // form isian nama & tarif yang dipakai dialog tambah dan edit
@@ -144,10 +175,7 @@ class _ServiceScreenState extends State<ServiceScreen> {
         TextField(
           controller: _priceController,
           keyboardType: TextInputType.number,
-          decoration: const InputDecoration(
-            labelText: 'Tarif per Kg (Rp)',
-            prefixText: 'Rp ',
-          ),
+          decoration: const InputDecoration(labelText: 'Tarif per Kg (Rp)', prefixText: 'Rp '),
         ),
       ],
     );
@@ -159,18 +187,64 @@ class _ServiceScreenState extends State<ServiceScreen> {
       appBar: AppBar(
         title: const Text('Master Layanan & Tarif'),
         centerTitle: true,
+        // garis progres saat data sedang disimpan ke server
+        bottom: _isSaving
+            ? const PreferredSize(preferredSize: Size.fromHeight(4), child: LinearProgressIndicator())
+            : null,
       ),
       // tombol mengambang untuk tambah data
       floatingActionButton: FloatingActionButton.extended(
-        onPressed: _showAddServiceDialog,
+        onPressed: _isSaving ? null : _showAddServiceDialog,
         icon: const Icon(Icons.add),
         label: const Text('Tambah Layanan'),
       ),
-      // ListView untuk menampilkan kumpulan daftar layanan
-      body: _isLoading
-          ? const Center(child: CircularProgressIndicator())
+      body: _buildBody(),
+    );
+  }
+
+  // pilih tampilan sesuai state: loading, error, kosong, atau daftar layanan
+  Widget _buildBody() {
+    if (_isLoading) {
+      return const Center(child: CircularProgressIndicator());
+    }
+
+    if (_errorMessage != null && _services.isEmpty) {
+      return Center(
+        child: Padding(
+          padding: const EdgeInsets.all(24),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              const Icon(Icons.cloud_off, size: 56, color: Colors.grey),
+              const SizedBox(height: 12),
+              Text(_errorMessage!, textAlign: TextAlign.center),
+              const SizedBox(height: 16),
+              FilledButton.icon(onPressed: _retry, icon: const Icon(Icons.refresh), label: const Text('Coba Lagi')),
+            ],
+          ),
+        ),
+      );
+    }
+
+    // tarik layar ke bawah untuk memuat ulang data dari API
+    return RefreshIndicator(
+      onRefresh: _loadServices,
+      child: _services.isEmpty
+          ? ListView(
+              // tetap bisa ditarik walau kosong
+              physics: const AlwaysScrollableScrollPhysics(),
+              children: const [
+                SizedBox(height: 160),
+                Icon(Icons.local_laundry_service_outlined, size: 56, color: Colors.grey),
+                SizedBox(height: 12),
+                Text('Belum ada layanan.', textAlign: TextAlign.center),
+              ],
+            )
+          // ListView untuk menampilkan kumpulan daftar layanan
           : ListView.builder(
-              padding: const EdgeInsets.all(16),
+              physics: const AlwaysScrollableScrollPhysics(),
+              // ruang bawah agar kartu terakhir tidak tertutup tombol tambah
+              padding: const EdgeInsets.fromLTRB(16, 16, 16, 88),
               itemCount: _services.length,
               itemBuilder: (context, index) {
                 final service = _services[index];
@@ -178,10 +252,8 @@ class _ServiceScreenState extends State<ServiceScreen> {
                   margin: const EdgeInsets.only(bottom: 12),
                   child: ListTile(
                     // ketuk kartu untuk ubah nama & tarif layanan
-                    onTap: () => _showEditServiceDialog(service),
-                    leading: CircleAvatar(
-                      child: Text('${index + 1}'),
-                    ),
+                    onTap: _isSaving ? null : () => _showEditServiceDialog(service),
+                    leading: CircleAvatar(child: Text('${index + 1}')),
                     title: Text(
                       service.name,
                       style: TextStyle(
@@ -193,12 +265,8 @@ class _ServiceScreenState extends State<ServiceScreen> {
                     subtitle: Text(service.formattedPrice),
                     trailing: Switch(
                       value: service.isActive,
-                      onChanged: (bool val) {
-                        // ubah status aktif/nonaktif layanan tanpa menghapus data
-                        setState(() {
-                          service.isActive = val;
-                        });
-                      },
+                      // ubah status aktif/nonaktif layanan tanpa menghapus data
+                      onChanged: _isSaving ? null : (bool val) => _toggleActive(service, val),
                     ),
                   ),
                 );

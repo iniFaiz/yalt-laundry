@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import '../../repositories/auth_repository.dart';
 import '../login_screen.dart';
 import 'service_screen.dart';
 import 'order_entry_screen.dart';
@@ -40,8 +41,11 @@ class _AdminDashboardState extends State<AdminDashboard> {
               backgroundColor: Colors.red,
               foregroundColor: Colors.white,
             ),
-            onPressed: () {
+            onPressed: () async {
               Navigator.pop(ctx);
+              // hapus sesi Supabase Auth, lalu kembali ke login
+              await AuthRepository.instance.signOut();
+              if (!context.mounted) return;
               // kembali ke Login pakai push & bersihkan riwayat halaman
               Navigator.pushAndRemoveUntil(
                 context,

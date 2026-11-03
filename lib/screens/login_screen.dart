@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 import '../widgets/app_logo.dart';
-import '../models/customer_model.dart';
+import '../repositories/auth_repository.dart';
 import 'home_screen.dart';
 
 class LoginScreen extends StatefulWidget {
@@ -53,18 +53,10 @@ class _LoginScreenState extends State<LoginScreen> {
       _isLoading = true;
     });
 
-    // simulasi request ke server dengan jeda waktu
-    await Future.delayed(const Duration(milliseconds: 700));
-
-    if (!mounted) return;
-
-    // Cari user di daftar dummyCustomers
-    final userIndex = CustomerModel.dummyCustomers.indexWhere(
-      (u) => u.phone == phone && u.password == password,
-    );
-
-    if (userIndex != -1) {
-      final user = CustomerModel.dummyCustomers[userIndex];
+    // login ke Supabase Auth lalu ambil profil (nama, nomor hp, role)
+    try {
+      final user = await AuthRepository.instance.signIn(phone, password);
+      if (!mounted) return;
       setState(() {
         _isLoading = false;
       });
@@ -77,10 +69,12 @@ class _LoginScreenState extends State<LoginScreen> {
           builder: (context) => HomeScreen(currentUser: user),
         ),
       );
-    } else {
+    } catch (e) {
+      debugPrint('Login gagal: $e');
+      if (!mounted) return;
       setState(() {
         _isLoading = false;
-        _errorMessage = 'Nomor HP atau password salah';
+        _errorMessage = e is AuthFailure ? e.message : 'Login gagal. Coba lagi beberapa saat lagi.';
       });
     }
   }

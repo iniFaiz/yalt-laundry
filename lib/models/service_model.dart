@@ -39,23 +39,23 @@ class ServiceModel {
   // getter format harga per kg
   String get formattedPrice => '${formatRupiah(pricePerKG)} / kg';
 
-  // konversi dari map json ke object model
+  // konversi dari baris json tabel services (Supabase) ke object model
   factory ServiceModel.fromJson(Map<String, dynamic> json) {
     return ServiceModel(
       id: json['id'] as String,
       name: json['name'] as String,
-      pricePerKG: (json['pricePerKG'] as num).toDouble(),
-      isActive: json['isActive'] as bool? ?? true,
+      pricePerKG: (json['price_per_kg'] as num).toDouble(),
+      isActive: json['is_active'] as bool? ?? true,
     );
   }
 
-  // konversi dari object model ke map json
+  // konversi dari object model ke map json sesuai kolom tabel services
   Map<String, dynamic> toJson() {
     return {
       'id': id,
       'name': name,
-      'pricePerKG': pricePerKG,
-      'isActive': isActive,
+      'price_per_kg': pricePerKG,
+      'is_active': isActive,
     };
   }
 

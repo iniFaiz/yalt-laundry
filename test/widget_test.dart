@@ -1,6 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:my_app/main.dart';
+import 'package:my_app/models/customer_model.dart';
+import 'package:my_app/repositories/auth_repository.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
 
 // login dengan mengisi nomor hp & password lalu tekan tombol login
 Future<void> _login(WidgetTester tester, String phone, String password) async {
@@ -11,6 +14,22 @@ Future<void> _login(WidgetTester tester, String phone, String password) async {
 }
 
 void main() {
+  // client Supabase palsu agar halaman yang memanggil API bisa dibangun saat tes
+  // (request HTTP di flutter test tidak keluar jaringan, halaman akan menampilkan state error)
+  setUpAll(() async {
+    await Supabase.initialize(
+      url: 'http://localhost',
+      publishableKey: 'test-key',
+      authOptions: FlutterAuthClientOptions(
+        localStorage: const EmptyLocalStorage(),
+        pkceAsyncStorage: _MemoryAsyncStorage(),
+        detectSessionInUri: false,
+      ),
+    );
+    // login memakai akun dummy lokal, bukan Supabase Auth sungguhan
+    AuthRepository.instance = _FakeAuthRepository();
+  });
+
   // ukuran layar seperti hp (360 x 800)
   setUp(() {
     final view = TestWidgetsFlutterBinding.instance.platformDispatcher.views.first;
@@ -170,19 +189,24 @@ void main() {
 
     final saveButton = find.text('Simpan Password Baru');
 
-    // password lama salah dan konfirmasi tidak sama memunculkan pesan validasi
+    // konfirmasi tidak sama memunculkan pesan validasi
     await tester.enterText(find.byType(TextFormField).at(0), 'salah123');
     await tester.enterText(find.byType(TextFormField).at(1), 'rahasia123');
     await tester.enterText(find.byType(TextFormField).at(2), 'rahasia999');
     await tester.ensureVisible(saveButton);
     await tester.tap(saveButton);
     await tester.pumpAndSettle();
-    expect(find.text('Password lama salah'), findsOneWidget);
     expect(find.text('Konfirmasi password tidak sama'), findsOneWidget);
+
+    // password lama salah ditolak oleh server
+    await tester.enterText(find.byType(TextFormField).at(2), 'rahasia123');
+    await tester.ensureVisible(saveButton);
+    await tester.tap(saveButton);
+    await tester.pumpAndSettle();
+    expect(find.text('Password lama salah'), findsOneWidget);
 
     // input benar, password tersimpan dan form kosong lagi
     await tester.enterText(find.byType(TextFormField).at(0), 'ayamgoreng');
-    await tester.enterText(find.byType(TextFormField).at(2), 'rahasia123');
     await tester.ensureVisible(saveButton);
     await tester.tap(saveButton);
     await tester.pumpAndSettle();
@@ -203,4 +227,45 @@ void main() {
     await _login(tester, '089876543210', 'rahasia123');
     expect(find.text('Halo, Jokowi 👋'), findsOneWidget);
   });
+}
+
+// penyimpanan PKCE di memori, pengganti SharedPreferences saat tes
+class _MemoryAsyncStorage extends GotrueAsyncStorage {
+  final Map<String, String> _data = {};
+
+  @override
+  Future<String?> getItem({required String key}) async => _data[key];
+
+  @override
+  Future<void> removeItem({required String key}) async => _data.remove(key);
+
+  @override
+  Future<void> setItem({required String key, required String value}) async => _data[key] = value;
+}
+
+// pengganti Supabase Auth saat tes, mencocokkan akun di CustomerModel.dummyCustomers
+class _FakeAuthRepository extends AuthRepository {
+  CustomerModel? _find(String phone) =>
+      CustomerModel.dummyCustomers.where((c) => c.phone == phone.trim()).firstOrNull;
+
+  @override
+  Future<CustomerModel> signIn(String phone, String password) async {
+    final user = _find(phone);
+    if (user == null || user.password != password) {
+      throw const AuthFailure('Nomor HP atau password salah');
+    }
+    return user;
+  }
+
+  @override
+  Future<void> signOut() async {}
+
+  @override
+  Future<void> changePassword(String phone, String oldPassword, String newPassword) async {
+    final user = _find(phone)!;
+    if (user.password != oldPassword) {
+      throw const AuthFailure('Password lama salah');
+    }
+    user.password = newPassword;
+  }
 }
