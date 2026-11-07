@@ -1,0 +1,33 @@
+meta {
+  name: GET Kolom pickup_token Langsung (ditolak)
+  type: http
+  seq: 6
+}
+
+get {
+  url: {{base_url}}/rest/v1/orders?select=pickup_token&limit=1
+  body: none
+  auth: bearer
+}
+
+params:query {
+  select: pickup_token
+  limit: 1
+}
+
+headers {
+  apikey: {{publishable_key}}
+}
+
+auth:bearer {
+  token: {{customer_a_token}}
+}
+
+tests {
+  test("HTTP 403", function() {
+    expect(res.getStatus()).to.equal(403);
+  });
+  test("kode error 42501", function() {
+    expect(res.getBody().code).to.equal("42501");
+  });
+}

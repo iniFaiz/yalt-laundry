@@ -1,0 +1,223 @@
+01 Auth\01 Login Admin (200 OK) - 885 ms
+Tests
+   ✓ HTTP 200
+   ✓ menerima access_token JWT
+01 Auth\02 Login Pelanggan A (200 OK) - 324 ms
+Tests
+   ✓ HTTP 200
+   ✓ menerima access_token JWT
+01 Auth\03 Login Pelanggan B (200 OK) - 407 ms
+Tests
+   ✓ HTTP 200
+   ✓ menerima access_token JWT
+01 Auth\04 Login Password Salah (400 Bad Request) - 393 ms
+Tests
+   ✓ HTTP 400
+   ✓ error invalid_credentials
+01 Auth\05 Profil Saya (Pelanggan A) (200 OK) - 475 ms
+Tests
+   ✓ HTTP 200
+   ✓ RLS: hanya profil sendiri
+02 Layanan\01 GET Daftar Layanan (publik) (200 OK) - 289 ms
+Tests
+   ✓ HTTP 200
+   ✓ ada layanan aktif dengan tarif > 0
+02 Layanan\02 POST Tambah Layanan (Admin) (201 Created) - 272 ms
+Tests
+   ✓ HTTP 201
+   ✓ layanan baru aktif
+02 Layanan\03 PATCH Ubah Tarif (Admin) (200 OK) - 255 ms
+Tests
+   ✓ HTTP 200
+   ✓ tarif berubah
+02 Layanan\04 POST Tambah Layanan sebagai Pelanggan (ditolak RLS) (403 Forbidden) - 250 ms
+Tests
+   ✓ HTTP 403
+   ✓ kode error 42501
+02 Layanan\05 POST Tarif 0 (ditolak constraint) (400 Bad Request) - 241 ms
+Tests
+   ✓ HTTP 400
+   ✓ kode error 23514
+02 Layanan\06 RPC Hapus Layanan Belum Dipakai (deleted) (200 OK) - 232 ms
+Tests
+   ✓ HTTP 200
+   ✓ layanan yang belum dipakai dihapus permanen
+03 Pesanan\01 RPC Buat Pesanan (Admin, atomik) (200 OK) - 266 ms
+ORDER_ID=ceb84c31-392f-4dcc-b2e0-c9773e4dd885 ORDER_CODE=ORD-00023
+Tests
+   ✓ HTTP 200
+   ✓ status awal diterima
+   ✓ total = fn_item_total(2.5) + fn_item_total(1) dengan snapshot tarif
+   ✓ token QR tidak ikut dikirim ke admin
+03 Pesanan\02 RPC Buat Pesanan sebagai Pelanggan (ditolak) (403 Forbidden) - 231 ms
+Tests
+   ✓ HTTP 403
+   ✓ kode error 42501
+03 Pesanan\03 GET Pesanan Saya (Pelanggan A) (200 OK) - 226 ms
+Tests
+   ✓ HTTP 200
+   ✓ pesanan baru terlihat oleh pemiliknya beserta item
+   ✓ semua pesanan milik pelanggan A
+03 Pesanan\04 GET Pesanan A oleh Pelanggan B (RLS) (200 OK) - 265 ms
+Tests
+   ✓ HTTP 200
+   ✓ RLS: pelanggan lain tidak melihat pesanan
+03 Pesanan\05 GET Item Pesanan A oleh Pelanggan B (RLS) (200 OK) - 214 ms
+Tests
+   ✓ HTTP 200
+   ✓ RLS: item pesanan orang lain kosong
+03 Pesanan\06 GET Kolom pickup_token Langsung (ditolak) (403 Forbidden) - 212 ms
+Tests
+   ✓ HTTP 403
+   ✓ kode error 42501
+03 Pesanan\07 PATCH Status Langsung oleh Admin (ditolak) (403 Forbidden) - 243 ms
+Tests
+   ✓ HTTP 403
+   ✓ kode error 42501
+03 Pesanan\08 RPC Transisi Tidak Valid diterima ke siap_diambil (409 Conflict) - 416 ms
+Tests
+   ✓ HTTP 409
+   ✓ kode error PT409
+   ✓ hint invalid_transition
+03 Pesanan\09 RPC Status diambil tanpa QR (ditolak) (409 Conflict) - 233 ms
+Tests
+   ✓ HTTP 409
+   ✓ kode error PT409
+   ✓ hint pickup_requires_qr
+03 Pesanan\10 RPC Status Tidak Dikenal (ditolak) (400 Bad Request) - 210 ms
+Tests
+   ✓ HTTP 400
+   ✓ kode error 22023
+   ✓ hint unknown_status
+03 Pesanan\11 RPC Ubah Status oleh Pelanggan (ditolak) (403 Forbidden) - 209 ms
+Tests
+   ✓ HTTP 403
+   ✓ kode error 42501
+03 Pesanan\12 RPC Status dicuci (Admin) (200 OK) - 219 ms
+Tests
+   ✓ HTTP 200
+   ✓ status menjadi dicuci
+03 Pesanan\13 RPC Status siap_diambil (Admin) (200 OK) - 215 ms
+Tests
+   ✓ HTTP 200
+   ✓ status menjadi siap_diambil
+04 QR Pickup\01 RPC Token QR oleh Pelanggan B (ditolak) (404 Not Found) - 425 ms
+Tests
+   ✓ HTTP 404
+   ✓ kode error PT404
+   ✓ hint order_not_found
+04 QR Pickup\02 RPC Token QR oleh Pemilik (200 OK) - 224 ms
+Tests
+   ✓ HTTP 200
+   ✓ token acak 32 karakter hex
+04 QR Pickup\03 RPC Scan QR Token Salah (404 Not Found) - 209 ms
+Tests
+   ✓ HTTP 404
+   ✓ kode error PT404
+   ✓ hint token_not_found
+04 QR Pickup\04 RPC Scan QR oleh Pelanggan (ditolak) (403 Forbidden) - 209 ms
+Tests
+   ✓ HTTP 403
+   ✓ kode error 42501
+04 QR Pickup\05 RPC Scan QR Valid (Admin) (200 OK) - 277 ms
+Tests
+   ✓ HTTP 200
+   ✓ status diambil & token terpakai
+04 QR Pickup\06 RPC Scan QR Ulang (ditolak) (409 Conflict) - 214 ms
+Tests
+   ✓ HTTP 409
+   ✓ kode error PT409
+   ✓ hint token_used
+04 QR Pickup\07 GET Riwayat Status (Pelanggan A) (200 OK) - 367 ms
+Tests
+   ✓ HTTP 200
+   ✓ trigger mencatat 4 langkah status berurutan
+   ✓ pesanan selesai
+04 QR Pickup\08 RPC Token Setelah Dipakai (null) (200 OK) - 211 ms
+Tests
+   ✓ HTTP 200
+   ✓ token tidak dikirim lagi
+05 Transaksi Rollback\01 GET Jumlah Pesanan Sebelum (206 Partial Content) - 213 ms
+Tests
+   ✓ HTTP 206 - Partial Content karena limit=1
+   ✓ content-range berisi total
+05 Transaksi Rollback\02 RPC Buat Pesanan dengan Item ke-2 Gagal (400 Bad Request) - 211 ms
+Tests
+   ✓ HTTP 400
+   ✓ kode error 22023
+   ✓ hint invalid_weight
+05 Transaksi Rollback\03 GET Jumlah Pesanan Sesudah (sama) (206 Partial Content) - 218 ms
+Tests
+   ✓ HTTP 206 - Partial Content karena limit=1
+   ✓ rollback: jumlah pesanan tidak bertambah
+06 View dan Laporan\01 GET active_orders_view (Admin) (200 OK) - 202 ms
+Tests
+   ✓ HTTP 200
+   ✓ tidak memuat pesanan yang sudah diambil
+06 View dan Laporan\02 GET daily_order_report_view (Admin) (200 OK) - 207 ms
+Tests
+   ✓ HTTP 200
+   ✓ laporan harian berisi agregat
+06 View dan Laporan\03 GET customer_summary_view (Pelanggan B, RLS) (200 OK) - 216 ms
+Tests
+   ✓ HTTP 200
+   ✓ pelanggan hanya melihat dirinya
+06 View dan Laporan\04 RPC fn_item_total (200 OK) - 209 ms
+Tests
+   ✓ HTTP 200
+   ✓ 2.5 kg x Rp 6.000 = Rp 15.000
+07 Pelanggan (Admin)\01 RPC Daftarkan Pelanggan (200 OK) - 265 ms
+Tests
+   ✓ HTTP 200
+   ✓ profil pelanggan dibuat
+07 Pelanggan (Admin)\02 RPC Daftarkan Nomor Ganda (ditolak) (409 Conflict) - 254 ms
+Tests
+   ✓ HTTP 409
+   ✓ kode error 23505
+   ✓ hint phone_taken
+07 Pelanggan (Admin)\03 RPC Daftarkan oleh Pelanggan (ditolak) (403 Forbidden) - 207 ms
+Tests
+   ✓ HTTP 403
+   ✓ kode error 42501
+07 Pelanggan (Admin)\04 Login Pelanggan Baru (password awal) (200 OK) - 314 ms
+Tests
+   ✓ HTTP 200
+   ✓ akun baru bisa login
+07 Pelanggan (Admin)\05 RPC Ubah Pelanggan (200 OK) - 223 ms
+Tests
+   ✓ HTTP 200
+   ✓ nama berubah
+07 Pelanggan (Admin)\06 RPC Hapus Pelanggan yang Punya Pesanan (ditolak) (409 Conflict) - 213 ms
+Tests
+   ✓ HTTP 409
+   ✓ kode error PT409
+   ✓ hint customer_has_orders
+07 Pelanggan (Admin)\07 RPC Hapus Pelanggan Baru (200 OK) - 232 ms
+Tests
+   ✓ HTTP 200
+   ✓ terhapus
+08 Tanpa Login\01 GET Pesanan Tanpa Login (ditolak) (401 Unauthorized) - 215 ms
+Tests
+   ✓ HTTP 401
+   ✓ kode error 42501
+08 Tanpa Login\02 RPC Buat Pesanan Tanpa Login (ditolak) (401 Unauthorized) - 215 ms
+Tests
+   ✓ HTTP 401
+   ✓ kode error 42501
+
+📊 Execution Summary
+┌───────────────┬────────────────┐
+│ Metric        │     Result     │
+├───────────────┼────────────────┤
+│ Status        │     ✓ PASS     │
+├───────────────┼────────────────┤
+│ Requests      │ 48 (48 Passed) │
+├───────────────┼────────────────┤
+│ Tests         │    109/109     │
+├───────────────┼────────────────┤
+│ Assertions    │      0/0       │
+├───────────────┼────────────────┤
+│ Duration (ms) │     23114      │
+└───────────────┴────────────────┘
+Wrote html results to G:\flutter\PAPB\my_app\docs\evidence\bruno-report.html
+Wrote json results to G:\flutter\PAPB\my_app\docs\evidence\bruno-report.json

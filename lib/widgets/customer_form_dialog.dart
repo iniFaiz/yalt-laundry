@@ -1,13 +1,15 @@
 import 'package:flutter/material.dart';
 import '../models/customer_model.dart';
-import '../models/order_model.dart';
+import '../repositories/customer_repository.dart';
 
 /// Membuka dialog form pelanggan yang dipakai bersama oleh tab Pelanggan dan Kasir POS.
 /// customer bernilai null berarti mode tambah, selain itu mode ubah.
-/// Hasil pop berisi pelanggan yang disimpan, atau null jika dibatalkan.
+/// Data disimpan ke Supabase (akun login + profil). Hasil pop berisi pelanggan
+/// yang tersimpan di server, atau null jika dibatalkan.
 Future<CustomerModel?> showCustomerFormDialog(BuildContext context, {CustomerModel? customer}) {
   return showDialog<CustomerModel>(
     context: context,
+    barrierDismissible: false,
     builder: (ctx) => CustomerFormDialog(customer: customer),
   );
 }
@@ -28,12 +30,12 @@ class _CustomerFormDialogState extends State<CustomerFormDialog> {
   late final TextEditingController _nameController;
   late final TextEditingController _phoneController;
 
+  bool _isSaving = false;
+  String? _phoneError; // pesan dari server jika nomor hp sudah dipakai
+  String? _errorMessage; // pesan error lain dari server
+
   // getter cek mode ubah atau tambah
   bool get _isEdit => widget.customer != null;
-
-  // nomor hp dikunci jika pelanggan sudah punya pesanan agar riwayat tetap terhubung
-  bool get _isPhoneLocked =>
-      _isEdit && OrderModel.dummyOrders.any((o) => o.customerPhone == widget.customer!.phone);
 
   // inisialisasi form dengan data lama memakai getter, atau kosong untuk data baru
   @override
@@ -51,30 +53,39 @@ class _CustomerFormDialogState extends State<CustomerFormDialog> {
     super.dispose();
   }
 
-  // simpan data lalu kirim pelanggan ke halaman pemanggil lewat hasil pop
-  void _save() {
+  // simpan ke server lalu kirim pelanggan ke halaman pemanggil lewat hasil pop
+  Future<void> _save() async {
+    _phoneError = null;
     // hentikan proses jika ada input yang tidak valid
     if (!_formKey.currentState!.validate()) return;
 
+    setState(() {
+      _isSaving = true;
+      _errorMessage = null;
+    });
+
     final name = _nameController.text.trim();
     final phone = _phoneController.text.trim();
+    final repository = CustomerRepository.instance;
 
-    CustomerModel saved;
-    if (_isEdit) {
-      // ubah data lewat setter model
-      saved = widget.customer!;
-      saved.name = name;
-      saved.phone = phone;
-    } else {
-      // buat pelanggan baru dan simpan ke daftar pelanggan
-      saved = CustomerModel(
-        id: 'CUST-${DateTime.now().millisecondsSinceEpoch.toString().substring(8)}',
-        name: name,
-        phone: phone,
-      );
-      CustomerModel.dummyCustomers.add(saved);
+    try {
+      final saved = _isEdit
+          ? await repository.updateCustomer(widget.customer!.id, name, phone)
+          : await repository.createCustomer(name, phone);
+      if (!mounted) return;
+      Navigator.pop(context, saved);
+    } catch (e) {
+      debugPrint('Gagal menyimpan pelanggan: $e');
+      if (!mounted) return;
+      setState(() => _isSaving = false);
+      if (CustomerRepository.isPhoneTaken(e)) {
+        // tampilkan pesan di bawah kolom nomor hp
+        _phoneError = 'Nomor HP sudah terdaftar';
+        _formKey.currentState!.validate();
+      } else {
+        setState(() => _errorMessage = CustomerRepository.errorMessage(e));
+      }
     }
-    Navigator.pop(context, saved);
   }
 
   @override
@@ -90,6 +101,7 @@ class _CustomerFormDialogState extends State<CustomerFormDialog> {
           children: [
             TextFormField(
               controller: _nameController,
+              enabled: !_isSaving,
               decoration: const InputDecoration(
                 labelText: 'Nama Lengkap',
                 prefixIcon: Icon(Icons.person),
@@ -100,38 +112,36 @@ class _CustomerFormDialogState extends State<CustomerFormDialog> {
             const SizedBox(height: 12),
             TextFormField(
               controller: _phoneController,
-              enabled: !_isPhoneLocked,
+              enabled: !_isSaving,
               keyboardType: TextInputType.phone,
               decoration: InputDecoration(
                 labelText: 'Nomor HP / WhatsApp',
                 prefixIcon: const Icon(Icons.phone),
                 hintText: '08...',
-                helperText: _isPhoneLocked
-                    ? 'Nomor HP terkunci karena sudah ada pesanan'
-                    : (_isEdit ? null : 'Password default: ayamgoreng'),
+                helperMaxLines: 2,
+                helperText: _isEdit
+                    ? 'Nomor HP juga dipakai pelanggan untuk login'
+                    : 'Password awal: ${CustomerRepository.defaultPassword}',
               ),
-              validator: (value) {
-                final phone = value ?? '';
-                final error = CustomerModel.validatePhone(phone);
-                if (error != null) return error;
-                // cek nomor hp tidak boleh sama dengan akun lain
-                if (CustomerModel.isPhoneRegistered(phone, except: widget.customer)) {
-                  return 'Nomor HP sudah terdaftar';
-                }
-                return null;
-              },
+              validator: (value) => CustomerModel.validatePhone(value ?? '') ?? _phoneError,
             ),
+            if (_errorMessage != null) ...[
+              const SizedBox(height: 12),
+              Text(_errorMessage!, style: const TextStyle(color: Colors.red)),
+            ],
           ],
         ),
       ),
       actions: [
         TextButton(
-          onPressed: () => Navigator.pop(context),
+          onPressed: _isSaving ? null : () => Navigator.pop(context),
           child: const Text('Batal'),
         ),
         ElevatedButton(
-          onPressed: _save,
-          child: const Text('Simpan'),
+          onPressed: _isSaving ? null : _save,
+          child: _isSaving
+              ? const SizedBox(width: 18, height: 18, child: CircularProgressIndicator(strokeWidth: 2))
+              : const Text('Simpan'),
         ),
       ],
     );

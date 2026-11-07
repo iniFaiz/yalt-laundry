@@ -1,0 +1,34 @@
+meta {
+  name: GET Jumlah Pesanan Sesudah (sama)
+  type: http
+  seq: 3
+}
+
+get {
+  url: {{base_url}}/rest/v1/orders?select=id&limit=1
+  body: none
+  auth: bearer
+}
+
+params:query {
+  select: id
+  limit: 1
+}
+
+headers {
+  apikey: {{publishable_key}}
+  Prefer: count=exact
+}
+
+auth:bearer {
+  token: {{admin_token}}
+}
+
+tests {
+  test("HTTP 206 - Partial Content karena limit=1", function() {
+    expect(res.getStatus()).to.equal(206);
+  });
+  test("rollback: jumlah pesanan tidak bertambah", function() {
+    expect(res.getHeader("content-range").split("/")[1]).to.equal(bru.getVar("orders_before"));
+  });
+}

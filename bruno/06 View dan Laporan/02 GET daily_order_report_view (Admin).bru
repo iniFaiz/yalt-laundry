@@ -1,0 +1,36 @@
+meta {
+  name: GET daily_order_report_view (Admin)
+  type: http
+  seq: 2
+}
+
+get {
+  url: {{base_url}}/rest/v1/daily_order_report_view?select=*&order=order_date.desc&limit=7
+  body: none
+  auth: bearer
+}
+
+params:query {
+  select: *
+  order: order_date.desc
+  limit: 7
+}
+
+headers {
+  apikey: {{publishable_key}}
+}
+
+auth:bearer {
+  token: {{admin_token}}
+}
+
+tests {
+  test("HTTP 200", function() {
+    expect(res.getStatus()).to.equal(200);
+  });
+  test("laporan harian berisi agregat", function() {
+    const r = res.getBody()[0];
+    expect(r.order_count).to.be.greaterThan(0);
+    expect(r).to.have.property("collected_amount");
+  });
+}

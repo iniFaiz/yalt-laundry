@@ -1,0 +1,38 @@
+meta {
+  name: PATCH Status Langsung oleh Admin (ditolak)
+  type: http
+  seq: 7
+}
+
+patch {
+  url: {{base_url}}/rest/v1/orders?id=eq.{{order_id}}
+  body: json
+  auth: bearer
+}
+
+params:query {
+  id: eq.{{order_id}}
+}
+
+headers {
+  apikey: {{publishable_key}}
+}
+
+auth:bearer {
+  token: {{admin_token}}
+}
+
+body:json {
+  {
+    "status": "diambil"
+  }
+}
+
+tests {
+  test("HTTP 403", function() {
+    expect(res.getStatus()).to.equal(403);
+  });
+  test("kode error 42501", function() {
+    expect(res.getBody().code).to.equal("42501");
+  });
+}

@@ -1,0 +1,38 @@
+meta {
+  name: RPC Status Tidak Dikenal (ditolak)
+  type: http
+  seq: 10
+}
+
+post {
+  url: {{base_url}}/rest/v1/rpc/sp_update_order_status
+  body: json
+  auth: bearer
+}
+
+headers {
+  apikey: {{publishable_key}}
+}
+
+auth:bearer {
+  token: {{admin_token}}
+}
+
+body:json {
+  {
+    "p_order_id": "{{order_id}}",
+    "p_new_status": "hilang"
+  }
+}
+
+tests {
+  test("HTTP 400", function() {
+    expect(res.getStatus()).to.equal(400);
+  });
+  test("kode error 22023", function() {
+    expect(res.getBody().code).to.equal("22023");
+  });
+  test("hint unknown_status", function() {
+    expect(res.getBody().hint).to.equal("unknown_status");
+  });
+}

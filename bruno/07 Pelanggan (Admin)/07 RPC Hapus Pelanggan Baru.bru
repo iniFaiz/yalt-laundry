@@ -1,0 +1,34 @@
+meta {
+  name: RPC Hapus Pelanggan Baru
+  type: http
+  seq: 7
+}
+
+post {
+  url: {{base_url}}/rest/v1/rpc/admin_delete_customer
+  body: json
+  auth: bearer
+}
+
+headers {
+  apikey: {{publishable_key}}
+}
+
+auth:bearer {
+  token: {{admin_token}}
+}
+
+body:json {
+  {
+    "p_customer_id": "{{new_customer_id}}"
+  }
+}
+
+tests {
+  test("HTTP 200", function() {
+    expect(res.getStatus()).to.equal(200);
+  });
+  test("terhapus", function() {
+    expect(res.getBody().deleted).to.equal(true);
+  });
+}

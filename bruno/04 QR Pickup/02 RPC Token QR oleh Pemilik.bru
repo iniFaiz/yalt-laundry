@@ -1,0 +1,38 @@
+meta {
+  name: RPC Token QR oleh Pemilik
+  type: http
+  seq: 2
+}
+
+post {
+  url: {{base_url}}/rest/v1/rpc/sp_get_pickup_token
+  body: json
+  auth: bearer
+}
+
+headers {
+  apikey: {{publishable_key}}
+}
+
+auth:bearer {
+  token: {{customer_a_token}}
+}
+
+body:json {
+  {
+    "p_order_id": "{{order_id}}"
+  }
+}
+
+script:post-response {
+  bru.setVar("pickup_token", res.getBody().pickup_token);
+}
+
+tests {
+  test("HTTP 200", function() {
+    expect(res.getStatus()).to.equal(200);
+  });
+  test("token acak 32 karakter hex", function() {
+    expect(res.getBody().pickup_token).to.match(/^[0-9a-f]{32}$/);
+  });
+}

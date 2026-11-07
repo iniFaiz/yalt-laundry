@@ -1,0 +1,37 @@
+meta {
+  name: RPC Token QR oleh Pelanggan B (ditolak)
+  type: http
+  seq: 1
+}
+
+post {
+  url: {{base_url}}/rest/v1/rpc/sp_get_pickup_token
+  body: json
+  auth: bearer
+}
+
+headers {
+  apikey: {{publishable_key}}
+}
+
+auth:bearer {
+  token: {{customer_b_token}}
+}
+
+body:json {
+  {
+    "p_order_id": "{{order_id}}"
+  }
+}
+
+tests {
+  test("HTTP 404", function() {
+    expect(res.getStatus()).to.equal(404);
+  });
+  test("kode error PT404", function() {
+    expect(res.getBody().code).to.equal("PT404");
+  });
+  test("hint order_not_found", function() {
+    expect(res.getBody().hint).to.equal("order_not_found");
+  });
+}

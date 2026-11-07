@@ -1,0 +1,34 @@
+meta {
+  name: RPC Token Setelah Dipakai (null)
+  type: http
+  seq: 8
+}
+
+post {
+  url: {{base_url}}/rest/v1/rpc/sp_get_pickup_token
+  body: json
+  auth: bearer
+}
+
+headers {
+  apikey: {{publishable_key}}
+}
+
+auth:bearer {
+  token: {{customer_a_token}}
+}
+
+body:json {
+  {
+    "p_order_id": "{{order_id}}"
+  }
+}
+
+tests {
+  test("HTTP 200", function() {
+    expect(res.getStatus()).to.equal(200);
+  });
+  test("token tidak dikirim lagi", function() {
+    expect(res.getBody().pickup_token).to.equal(null);
+  });
+}

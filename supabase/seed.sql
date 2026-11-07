@@ -1,10 +1,11 @@
--- Data awal layanan laundry (sama dengan data dummy di aplikasi)
-insert into public.services (name, price_per_kg, is_active) values
-  ('Cuci Kering', 6000, true),
-  ('Cuci Setrika', 8000, true),
-  ('Setrika Saja', 5000, true),
-  ('Cuci Kilat', 12000, true)
-on conflict do nothing;
+-- Data awal layanan laundry beserta estimasi lama pengerjaan (jam).
+-- Jika layanan sudah ada, hanya estimasi durasinya yang diperbarui (tarif tidak ditimpa).
+insert into public.services (name, price_per_kg, is_active, duration_hours) values
+  ('Cuci Kering', 6000, true, 48),
+  ('Cuci Setrika', 8000, true, 48),
+  ('Setrika Saja', 5000, true, 24),
+  ('Cuci Kilat', 12000, true, 6)
+on conflict ((lower(name))) do update set duration_hours = excluded.duration_hours;
 
 -- Akun demo Supabase Auth. Login di aplikasi memakai nomor HP + password;
 -- aplikasi mengubah nomor HP menjadi email internal <nomor_hp>@yalt.test.

@@ -1,0 +1,28 @@
+meta {
+  name: GET Pesanan Tanpa Login (ditolak)
+  type: http
+  seq: 1
+}
+
+get {
+  url: {{base_url}}/rest/v1/orders?select=id
+  body: none
+  auth: none
+}
+
+params:query {
+  select: id
+}
+
+headers {
+  apikey: {{publishable_key}}
+}
+
+tests {
+  test("HTTP 401", function() {
+    expect(res.getStatus()).to.equal(401);
+  });
+  test("kode error 42501", function() {
+    expect(res.getBody().code).to.equal("42501");
+  });
+}

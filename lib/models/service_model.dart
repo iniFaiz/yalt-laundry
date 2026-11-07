@@ -4,6 +4,7 @@ class ServiceModel {
   final String id;
   String _name; // private, diubah lewat setter
   double _pricePerKG; // private, diubah lewat setter
+  int _durationHours; // private, estimasi lama pengerjaan (jam)
   bool isActive;
 
   ServiceModel({
@@ -11,6 +12,7 @@ class ServiceModel {
     required this._name, // dipanggil dengan nama parameter name
     required this._pricePerKG, // dipanggil dengan nama parameter pricePerKG
     required this.isActive,
+    this._durationHours = 48, // dipanggil dengan nama parameter durationHours
   });
 
   // getter nama layanan
@@ -36,8 +38,23 @@ class ServiceModel {
     _pricePerKG = value;
   }
 
+  // getter estimasi lama pengerjaan
+  int get durationHours => _durationHours;
+
+  // setter estimasi lama pengerjaan, 1 jam - 30 hari (sama dengan constraint database)
+  set durationHours(int value) {
+    if (value < 1 || value > 720) {
+      throw ArgumentError('Estimasi pengerjaan harus 1 - 720 jam');
+    }
+    _durationHours = value;
+  }
+
   // getter format harga per kg
   String get formattedPrice => '${formatRupiah(pricePerKG)} / kg';
+
+  // getter format estimasi, contoh "6 jam" atau "2 hari"
+  String get formattedDuration =>
+      durationHours % 24 == 0 ? '${durationHours ~/ 24} hari' : '$durationHours jam';
 
   // konversi dari baris json tabel services (Supabase) ke object model
   factory ServiceModel.fromJson(Map<String, dynamic> json) {
@@ -46,6 +63,7 @@ class ServiceModel {
       name: json['name'] as String,
       pricePerKG: (json['price_per_kg'] as num).toDouble(),
       isActive: json['is_active'] as bool? ?? true,
+      durationHours: (json['duration_hours'] as num?)?.toInt() ?? 48,
     );
   }
 
@@ -56,14 +74,7 @@ class ServiceModel {
       'name': name,
       'price_per_kg': pricePerKG,
       'is_active': isActive,
+      'duration_hours': durationHours,
     };
   }
-
-  // data dummy layanan, dipakai bersama oleh halaman admin & pelanggan
-  static List<ServiceModel> dummyServices = [
-    ServiceModel(id: '1', name: 'Cuci Kering', pricePerKG: 6000, isActive: true),
-    ServiceModel(id: '2', name: 'Cuci Setrika', pricePerKG: 8000, isActive: true),
-    ServiceModel(id: '3', name: 'Setrika Saja', pricePerKG: 5000, isActive: true),
-    ServiceModel(id: '4', name: 'Cuci Kilat', pricePerKG: 12000, isActive: true),
-  ];
 }

@@ -1,0 +1,31 @@
+meta {
+  name: RPC Buat Pesanan Tanpa Login (ditolak)
+  type: http
+  seq: 2
+}
+
+post {
+  url: {{base_url}}/rest/v1/rpc/sp_create_order
+  body: json
+  auth: none
+}
+
+headers {
+  apikey: {{publishable_key}}
+}
+
+body:json {
+  {
+    "p_customer_id": "{{customer_a_id}}",
+    "p_items": []
+  }
+}
+
+tests {
+  test("HTTP 401", function() {
+    expect(res.getStatus()).to.equal(401);
+  });
+  test("kode error 42501", function() {
+    expect(res.getBody().code).to.equal("42501");
+  });
+}

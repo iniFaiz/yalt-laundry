@@ -1,9 +1,10 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:my_app/main.dart';
-import 'package:my_app/models/customer_model.dart';
-import 'package:my_app/repositories/auth_repository.dart';
+import 'package:qr_flutter/qr_flutter.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
+
+import 'fakes.dart';
 
 // login dengan mengisi nomor hp & password lalu tekan tombol login
 Future<void> _login(WidgetTester tester, String phone, String password) async {
@@ -14,8 +15,9 @@ Future<void> _login(WidgetTester tester, String phone, String password) async {
 }
 
 void main() {
-  // client Supabase palsu agar halaman yang memanggil API bisa dibangun saat tes
-  // (request HTTP di flutter test tidak keluar jaringan, halaman akan menampilkan state error)
+  late FakeBackend backend;
+
+  // client Supabase palsu agar Supabase.instance tersedia; semua repository diganti versi palsu
   setUpAll(() async {
     await Supabase.initialize(
       url: 'http://localhost',
@@ -26,12 +28,11 @@ void main() {
         detectSessionInUri: false,
       ),
     );
-    // login memakai akun dummy lokal, bukan Supabase Auth sungguhan
-    AuthRepository.instance = _FakeAuthRepository();
   });
 
-  // ukuran layar seperti hp (360 x 800)
+  // ukuran layar seperti hp (360 x 800) dan data palsu yang baru di setiap tes
   setUp(() {
+    backend = FakeBackend()..install();
     final view = TestWidgetsFlutterBinding.instance.platformDispatcher.views.first;
     view.physicalSize = const Size(1080, 2400);
     view.devicePixelRatio = 3.0;
@@ -81,20 +82,34 @@ void main() {
     await tester.tap(find.text('Layanan'));
     await tester.pumpAndSettle();
     expect(find.text('Master Layanan & Tarif'), findsOneWidget);
+    expect(find.text('Cuci Kilat'), findsOneWidget);
   });
 
-  testWidgets('Login pelanggan, buka detail pesanan (push) lalu kembali (pop)', (WidgetTester tester) async {
+  testWidgets('Pelanggan membuka detail pesanan: timeline, QR aktif, struk, lalu kembali', (WidgetTester tester) async {
     await tester.pumpWidget(const MyApp());
     await tester.pumpAndSettle();
 
     await _login(tester, '081234567890', 'ayamgoreng');
     expect(find.text('Halo, Prabowo 👋'), findsOneWidget);
+    // pesanan milik pelanggan lain tidak tampil
+    expect(find.text('ORD-00002'), findsNothing);
 
     // push ke halaman detail pesanan
-    await tester.tap(find.text('ORD-001'));
+    await tester.tap(find.text('ORD-00001'));
     await tester.pumpAndSettle();
-    expect(find.text('Detail ORD-001'), findsOneWidget);
-    expect(find.text('Rp 24.000'), findsOneWidget);
+    expect(find.text('Detail ORD-00001'), findsOneWidget);
+    // timeline: waktu tiap langkah diambil dari riwayat status, 4 langkah muat dalam satu layar
+    expect(find.text('Siap Diambil'), findsWidgets);
+    expect(find.text('Selesai'), findsOneWidget);
+    expect(tester.getTopLeft(find.text('Selesai')).dy, lessThan(800));
+    final qrMessage = find.text('Tunjukkan QR ini ke kasir saat mengambil pakaian');
+    await tester.dragUntilVisible(qrMessage, find.byType(ListView).last, const Offset(0, -200));
+    expect(qrMessage, findsOneWidget);
+    expect(find.byType(QrImageView), findsOneWidget);
+    // struk digital memakai snapshot tarif: 3 kg x Rp 8.000
+    await tester.dragUntilVisible(find.text('Total Bayar'), find.byType(ListView).last, const Offset(0, -200));
+    expect(find.text('Rp 24.000'), findsWidgets);
+    expect(find.text('3 kg × Rp 8.000 / kg'), findsOneWidget);
 
     // pop kembali ke beranda pelanggan
     await tester.tap(find.byTooltip('Kembali'));
@@ -113,6 +128,7 @@ void main() {
     await tester.pumpAndSettle();
     expect(find.text('Data Pelanggan'), findsOneWidget);
     expect(find.text('Prabowo'), findsOneWidget);
+    expect(find.text('081234567890 • 1 pesanan'), findsOneWidget);
 
     // nomor hp salah format memunculkan pesan validasi
     await tester.tap(find.text('Tambah Pelanggan'));
@@ -129,6 +145,13 @@ void main() {
     await tester.pumpAndSettle();
     expect(find.text('Gibran'), findsOneWidget);
     expect(find.text('085700000001 • 0 pesanan'), findsOneWidget);
+
+    // pelanggan yang sudah punya pesanan ditolak dihapus (aturan dari server)
+    await tester.tap(find.byTooltip('Hapus Pelanggan').first);
+    await tester.pumpAndSettle();
+    await tester.tap(find.widgetWithText(ElevatedButton, 'Hapus'));
+    await tester.pumpAndSettle();
+    expect(find.text('Pelanggan tidak bisa dihapus karena sudah memiliki riwayat pesanan'), findsOneWidget);
   });
 
   testWidgets('Kasir POS registrasi pelanggan baru lalu langsung buat pesanan', (WidgetTester tester) async {
@@ -142,7 +165,7 @@ void main() {
     await tester.pumpAndSettle();
     await tester.enterText(find.byType(TextFormField).at(0), 'Kaesang');
 
-    // nomor hp yang sudah dipakai pelanggan lain ditolak
+    // nomor hp yang sudah dipakai pelanggan lain ditolak server
     await tester.enterText(find.byType(TextFormField).at(1), '081234567890');
     await tester.tap(find.text('Simpan'));
     await tester.pumpAndSettle();
@@ -153,6 +176,9 @@ void main() {
     await tester.tap(find.text('Simpan'));
     await tester.pumpAndSettle();
     expect(find.text('Kaesang (085700000002)'), findsOneWidget);
+    // tunggu snackbar sukses hilang agar tidak menutupi tombol simpan
+    await tester.pump(const Duration(seconds: 5));
+    await tester.pumpAndSettle();
 
     // pilih layanan dan isi berat
     await tester.tap(find.text('Pilih Layanan'));
@@ -161,18 +187,44 @@ void main() {
     await tester.pumpAndSettle();
     await tester.enterText(find.widgetWithText(TextField, 'Contoh: 3.5'), '2');
     await tester.pumpAndSettle();
-    // total dicek di kotak Total Tagihan saja (pesanan lama ORD-002 juga Rp 12.000)
     final totalRow = find.ancestor(of: find.text('Total Tagihan:'), matching: find.byType(Row));
     expect(find.descendant(of: totalRow, matching: find.text('Rp 12.000')), findsOneWidget);
 
-    // simpan pesanan, form kembali kosong
+    // simpan pesanan: struk digital tampil, form kembali kosong
     final submitButton = find.text('Buat Pesanan & Cetak Bukti');
     await tester.ensureVisible(submitButton);
     await tester.tap(submitButton);
     await tester.pumpAndSettle();
     expect(find.text('Pesanan untuk "Kaesang" berhasil dibuat!'), findsOneWidget);
+    expect(find.text('Bukti Pesanan'), findsOneWidget);
+    expect(find.text('ORD-00003'), findsOneWidget);
+    await tester.tap(find.text('Tutup'));
+    await tester.pumpAndSettle();
+    await tester.drag(find.byType(ListView).first, const Offset(0, 1000));
+    await tester.pumpAndSettle();
     expect(find.text('-- Pilih Pelanggan --'), findsOneWidget);
     expect(find.text('Pilih Layanan'), findsOneWidget);
+    expect(backend.orders.first.customerName, 'Kaesang');
+  });
+
+  testWidgets('Admin mengubah status pesanan di Monitoring', (WidgetTester tester) async {
+    await tester.pumpWidget(const MyApp());
+    await tester.pumpAndSettle();
+
+    await _login(tester, '081111111111', 'ayamgoreng');
+    await tester.tap(find.text('Monitoring'));
+    await tester.pumpAndSettle();
+
+    // ORD-00002 masih diterima -> tombol Mulai Cuci (geser daftar agar tidak tertutup tombol scan)
+    await tester.drag(find.byType(ListView).first, const Offset(0, -300));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Mulai Cuci'));
+    await tester.pumpAndSettle();
+    expect(find.text('Pesanan ORD-00002 sekarang berstatus: Sedang Dicuci'), findsOneWidget);
+    expect(backend.orders.firstWhere((o) => o.code == 'ORD-00002').status, 'dicuci');
+
+    // pesanan siap diambil tidak punya tombol, hanya lewat scan QR
+    expect(find.text('Menunggu Scan QR Pelanggan'), findsOneWidget);
   });
 
   testWidgets('Pelanggan ganti password di tab Profil lalu login dengan password baru', (WidgetTester tester) async {
@@ -186,6 +238,7 @@ void main() {
     await tester.pumpAndSettle();
     expect(find.text('Ganti Password'), findsOneWidget);
     expect(find.text('CUST-02'), findsOneWidget);
+    expect(find.text('1 pesanan'), findsOneWidget);
 
     final saveButton = find.text('Simpan Password Baru');
 
@@ -241,31 +294,4 @@ class _MemoryAsyncStorage extends GotrueAsyncStorage {
 
   @override
   Future<void> setItem({required String key, required String value}) async => _data[key] = value;
-}
-
-// pengganti Supabase Auth saat tes, mencocokkan akun di CustomerModel.dummyCustomers
-class _FakeAuthRepository extends AuthRepository {
-  CustomerModel? _find(String phone) =>
-      CustomerModel.dummyCustomers.where((c) => c.phone == phone.trim()).firstOrNull;
-
-  @override
-  Future<CustomerModel> signIn(String phone, String password) async {
-    final user = _find(phone);
-    if (user == null || user.password != password) {
-      throw const AuthFailure('Nomor HP atau password salah');
-    }
-    return user;
-  }
-
-  @override
-  Future<void> signOut() async {}
-
-  @override
-  Future<void> changePassword(String phone, String oldPassword, String newPassword) async {
-    final user = _find(phone)!;
-    if (user.password != oldPassword) {
-      throw const AuthFailure('Password lama salah');
-    }
-    user.password = newPassword;
-  }
 }

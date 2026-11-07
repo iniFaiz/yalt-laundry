@@ -1,0 +1,35 @@
+meta {
+  name: RPC Status dicuci (Admin)
+  type: http
+  seq: 12
+}
+
+post {
+  url: {{base_url}}/rest/v1/rpc/sp_update_order_status
+  body: json
+  auth: bearer
+}
+
+headers {
+  apikey: {{publishable_key}}
+}
+
+auth:bearer {
+  token: {{admin_token}}
+}
+
+body:json {
+  {
+    "p_order_id": "{{order_id}}",
+    "p_new_status": "dicuci"
+  }
+}
+
+tests {
+  test("HTTP 200", function() {
+    expect(res.getStatus()).to.equal(200);
+  });
+  test("status menjadi dicuci", function() {
+    expect(res.getBody().status).to.equal("dicuci");
+  });
+}

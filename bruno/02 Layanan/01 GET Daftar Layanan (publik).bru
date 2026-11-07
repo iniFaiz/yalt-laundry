@@ -1,0 +1,37 @@
+meta {
+  name: GET Daftar Layanan (publik)
+  type: http
+  seq: 1
+}
+
+get {
+  url: {{base_url}}/rest/v1/services?select=id,name,price_per_kg,is_active,duration_hours&order=name.asc
+  body: none
+  auth: none
+}
+
+params:query {
+  select: id,name,price_per_kg,is_active,duration_hours
+  order: name.asc
+}
+
+headers {
+  apikey: {{publishable_key}}
+}
+
+script:post-response {
+  const aktif = res.getBody().filter(s => s.is_active);
+  bru.setVar("service_id", aktif[0].id);
+  bru.setVar("service_price", aktif[0].price_per_kg);
+}
+
+tests {
+  test("HTTP 200", function() {
+    expect(res.getStatus()).to.equal(200);
+  });
+  test("ada layanan aktif dengan tarif > 0", function() {
+    const aktif = res.getBody().filter(s => s.is_active);
+    expect(aktif.length).to.be.greaterThan(0);
+    aktif.forEach(s => expect(s.price_per_kg).to.be.greaterThan(0));
+  });
+}

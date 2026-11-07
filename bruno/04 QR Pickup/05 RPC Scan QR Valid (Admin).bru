@@ -1,0 +1,36 @@
+meta {
+  name: RPC Scan QR Valid (Admin)
+  type: http
+  seq: 5
+}
+
+post {
+  url: {{base_url}}/rest/v1/rpc/sp_pickup_order
+  body: json
+  auth: bearer
+}
+
+headers {
+  apikey: {{publishable_key}}
+}
+
+auth:bearer {
+  token: {{admin_token}}
+}
+
+body:json {
+  {
+    "p_token": "{{pickup_token}}"
+  }
+}
+
+tests {
+  test("HTTP 200", function() {
+    expect(res.getStatus()).to.equal(200);
+  });
+  test("status diambil & token terpakai", function() {
+    expect(res.getBody().status).to.equal("diambil");
+    expect(res.getBody().pickup_token_used_at).to.be.a("string");
+    expect(res.getBody().picked_up_by).to.equal(bru.getVar("admin_id"));
+  });
+}

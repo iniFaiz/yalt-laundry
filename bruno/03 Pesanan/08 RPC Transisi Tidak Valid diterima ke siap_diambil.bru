@@ -1,0 +1,38 @@
+meta {
+  name: RPC Transisi Tidak Valid diterima ke siap_diambil
+  type: http
+  seq: 8
+}
+
+post {
+  url: {{base_url}}/rest/v1/rpc/sp_update_order_status
+  body: json
+  auth: bearer
+}
+
+headers {
+  apikey: {{publishable_key}}
+}
+
+auth:bearer {
+  token: {{admin_token}}
+}
+
+body:json {
+  {
+    "p_order_id": "{{order_id}}",
+    "p_new_status": "siap_diambil"
+  }
+}
+
+tests {
+  test("HTTP 409", function() {
+    expect(res.getStatus()).to.equal(409);
+  });
+  test("kode error PT409", function() {
+    expect(res.getBody().code).to.equal("PT409");
+  });
+  test("hint invalid_transition", function() {
+    expect(res.getBody().hint).to.equal("invalid_transition");
+  });
+}

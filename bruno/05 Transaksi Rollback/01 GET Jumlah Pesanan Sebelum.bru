@@ -1,0 +1,38 @@
+meta {
+  name: GET Jumlah Pesanan Sebelum
+  type: http
+  seq: 1
+}
+
+get {
+  url: {{base_url}}/rest/v1/orders?select=id&limit=1
+  body: none
+  auth: bearer
+}
+
+params:query {
+  select: id
+  limit: 1
+}
+
+headers {
+  apikey: {{publishable_key}}
+  Prefer: count=exact
+}
+
+auth:bearer {
+  token: {{admin_token}}
+}
+
+script:post-response {
+  bru.setVar("orders_before", res.getHeader("content-range").split("/")[1]);
+}
+
+tests {
+  test("HTTP 206 - Partial Content karena limit=1", function() {
+    expect(res.getStatus()).to.equal(206);
+  });
+  test("content-range berisi total", function() {
+    expect(res.getHeader("content-range")).to.match(/\/\d+$/);
+  });
+}

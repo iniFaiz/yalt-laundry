@@ -1,0 +1,40 @@
+meta {
+  name: PATCH Ubah Tarif (Admin)
+  type: http
+  seq: 3
+}
+
+patch {
+  url: {{base_url}}/rest/v1/services?id=eq.{{temp_service_id}}&select=id,price_per_kg
+  body: json
+  auth: bearer
+}
+
+params:query {
+  id: eq.{{temp_service_id}}
+  select: id,price_per_kg
+}
+
+headers {
+  apikey: {{publishable_key}}
+  Prefer: return=representation
+}
+
+auth:bearer {
+  token: {{admin_token}}
+}
+
+body:json {
+  {
+    "price_per_kg": 7500
+  }
+}
+
+tests {
+  test("HTTP 200", function() {
+    expect(res.getStatus()).to.equal(200);
+  });
+  test("tarif berubah", function() {
+    expect(res.getBody()[0].price_per_kg).to.equal(7500);
+  });
+}

@@ -1,0 +1,37 @@
+meta {
+  name: RPC Hapus Pelanggan yang Punya Pesanan (ditolak)
+  type: http
+  seq: 6
+}
+
+post {
+  url: {{base_url}}/rest/v1/rpc/admin_delete_customer
+  body: json
+  auth: bearer
+}
+
+headers {
+  apikey: {{publishable_key}}
+}
+
+auth:bearer {
+  token: {{admin_token}}
+}
+
+body:json {
+  {
+    "p_customer_id": "{{customer_a_id}}"
+  }
+}
+
+tests {
+  test("HTTP 409", function() {
+    expect(res.getStatus()).to.equal(409);
+  });
+  test("kode error PT409", function() {
+    expect(res.getBody().code).to.equal("PT409");
+  });
+  test("hint customer_has_orders", function() {
+    expect(res.getBody().hint).to.equal("customer_has_orders");
+  });
+}

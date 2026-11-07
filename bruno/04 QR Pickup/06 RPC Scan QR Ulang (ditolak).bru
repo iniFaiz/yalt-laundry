@@ -1,0 +1,37 @@
+meta {
+  name: RPC Scan QR Ulang (ditolak)
+  type: http
+  seq: 6
+}
+
+post {
+  url: {{base_url}}/rest/v1/rpc/sp_pickup_order
+  body: json
+  auth: bearer
+}
+
+headers {
+  apikey: {{publishable_key}}
+}
+
+auth:bearer {
+  token: {{admin_token}}
+}
+
+body:json {
+  {
+    "p_token": "{{pickup_token}}"
+  }
+}
+
+tests {
+  test("HTTP 409", function() {
+    expect(res.getStatus()).to.equal(409);
+  });
+  test("kode error PT409", function() {
+    expect(res.getBody().code).to.equal("PT409");
+  });
+  test("hint token_used", function() {
+    expect(res.getBody().hint).to.equal("token_used");
+  });
+}

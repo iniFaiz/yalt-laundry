@@ -1,14 +1,14 @@
 import 'package:flutter/material.dart';
 import '../../models/customer_model.dart';
-import '../../models/order_model.dart';
 import '../../repositories/auth_repository.dart';
 
 /// Halaman profil pelanggan, ditampilkan sebagai tab ketiga di beranda pelanggan.
 /// Berisi data akun dan form ganti password.
 class ProfileScreen extends StatefulWidget {
   final CustomerModel customer;
+  final int orderCount; // jumlah pesanan dari data server (dimuat beranda pelanggan)
 
-  const ProfileScreen({super.key, required this.customer});
+  const ProfileScreen({super.key, required this.customer, this.orderCount = 0});
 
   @override
   State<ProfileScreen> createState() => _ProfileScreenState();
@@ -97,8 +97,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
   @override
   Widget build(BuildContext context) {
     final customer = widget.customer;
-    // hitung jumlah pesanan milik pelanggan berdasarkan nomor hp
-    final orderCount = OrderModel.dummyOrders.where((o) => o.customerPhone == customer.phone).length;
+    final orderCount = widget.orderCount;
 
     return ListView(
       padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 16),

@@ -1,0 +1,35 @@
+meta {
+  name: RPC fn_item_total
+  type: http
+  seq: 4
+}
+
+post {
+  url: {{base_url}}/rest/v1/rpc/fn_item_total
+  body: json
+  auth: bearer
+}
+
+headers {
+  apikey: {{publishable_key}}
+}
+
+auth:bearer {
+  token: {{customer_a_token}}
+}
+
+body:json {
+  {
+    "p_weight_kg": 2.5,
+    "p_price_per_kg": 6000
+  }
+}
+
+tests {
+  test("HTTP 200", function() {
+    expect(res.getStatus()).to.equal(200);
+  });
+  test("2.5 kg x Rp 6.000 = Rp 15.000", function() {
+    expect(Number(res.getBody())).to.equal(15000);
+  });
+}

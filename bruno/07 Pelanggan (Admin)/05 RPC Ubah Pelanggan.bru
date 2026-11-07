@@ -1,0 +1,36 @@
+meta {
+  name: RPC Ubah Pelanggan
+  type: http
+  seq: 5
+}
+
+post {
+  url: {{base_url}}/rest/v1/rpc/admin_update_customer
+  body: json
+  auth: bearer
+}
+
+headers {
+  apikey: {{publishable_key}}
+}
+
+auth:bearer {
+  token: {{admin_token}}
+}
+
+body:json {
+  {
+    "p_customer_id": "{{new_customer_id}}",
+    "p_full_name": "Pelanggan Bruno Ubah",
+    "p_phone": "{{new_phone}}"
+  }
+}
+
+tests {
+  test("HTTP 200", function() {
+    expect(res.getStatus()).to.equal(200);
+  });
+  test("nama berubah", function() {
+    expect(res.getBody().full_name).to.equal("Pelanggan Bruno Ubah");
+  });
+}

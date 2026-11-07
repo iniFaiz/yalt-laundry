@@ -6,6 +6,12 @@
       "runtimeExecutable": "flutter",
       "runtimeArgs": ["run", "-d", "web-server", "--release", "--web-port", "8080", "--dart-define-from-file=.env"],
       "port": 8080
+    },
+    {
+      "name": "yalt-web-static",
+      "runtimeExecutable": "npx",
+      "runtimeArgs": ["--yes", "serve@14.2.4", "-s", "build/web", "-l", "8090"],
+      "port": 8090
     }
   ]
 }

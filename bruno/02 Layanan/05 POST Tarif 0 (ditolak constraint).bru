@@ -1,0 +1,35 @@
+meta {
+  name: POST Tarif 0 (ditolak constraint)
+  type: http
+  seq: 5
+}
+
+post {
+  url: {{base_url}}/rest/v1/services
+  body: json
+  auth: bearer
+}
+
+headers {
+  apikey: {{publishable_key}}
+}
+
+auth:bearer {
+  token: {{admin_token}}
+}
+
+body:json {
+  {
+    "name": "Tarif Nol",
+    "price_per_kg": 0
+  }
+}
+
+tests {
+  test("HTTP 400", function() {
+    expect(res.getStatus()).to.equal(400);
+  });
+  test("kode error 23514", function() {
+    expect(res.getBody().code).to.equal("23514");
+  });
+}

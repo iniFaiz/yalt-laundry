@@ -1,0 +1,14 @@
+00:00 +0: loading G:/flutter/PAPB/my_app/test/order_repository_test.dart
+00:00 +0: G:/flutter/PAPB/my_app/test/order_repository_test.dart: (setUpAll)
+00:01 +1: G:/flutter/PAPB/my_app/test/order_repository_test.dart: (setUpAll)
+00:01 +2: G:/flutter/PAPB/my_app/test/order_repository_test.dart: (setUpAll)
+00:01 +2: G:/flutter/PAPB/my_app/test/service_repository_test.dart: RLS: pelanggan tidak bisa menambah atau mengubah layanan
+00:02 +2: G:/flutter/PAPB/my_app/test/order_repository_test.dart: Alur demo: admin buat pesanan -> pelanggan lihat -> update status -> scan QR -> selesai
+Pesanan tes integrasi: ORD-00021 (8aa8d751-cedd-4ebf-9170-eded737ee9eb)
+00:03 +3: G:/flutter/PAPB/my_app/test/order_repository_test.dart: Alur demo: admin buat pesanan -> pelanggan lihat -> update status -> scan QR -> selesai
+00:03 +4: G:/flutter/PAPB/my_app/test/order_repository_test.dart: Alur demo: admin buat pesanan -> pelanggan lihat -> update status -> scan QR -> selesai
+00:05 +5: G:/flutter/PAPB/my_app/test/order_repository_test.dart: Transaksi: item kedua gagal -> seluruh pesanan dibatalkan (rollback)
+00:06 +6: G:/flutter/PAPB/my_app/test/order_repository_test.dart: Pelanggan tidak bisa membaca kolom pickup_token secara langsung
+00:06 +7: G:/flutter/PAPB/my_app/test/order_repository_test.dart: Kelola pelanggan: buat akun, nomor ganda ditolak, lalu hapus
+00:07 +8: G:/flutter/PAPB/my_app/test/order_repository_test.dart: (tearDownAll)
+00:08 +8: All tests passed!

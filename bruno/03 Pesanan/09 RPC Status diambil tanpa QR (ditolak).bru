@@ -1,0 +1,38 @@
+meta {
+  name: RPC Status diambil tanpa QR (ditolak)
+  type: http
+  seq: 9
+}
+
+post {
+  url: {{base_url}}/rest/v1/rpc/sp_update_order_status
+  body: json
+  auth: bearer
+}
+
+headers {
+  apikey: {{publishable_key}}
+}
+
+auth:bearer {
+  token: {{admin_token}}
+}
+
+body:json {
+  {
+    "p_order_id": "{{order_id}}",
+    "p_new_status": "diambil"
+  }
+}
+
+tests {
+  test("HTTP 409", function() {
+    expect(res.getStatus()).to.equal(409);
+  });
+  test("kode error PT409", function() {
+    expect(res.getBody().code).to.equal("PT409");
+  });
+  test("hint pickup_requires_qr", function() {
+    expect(res.getBody().hint).to.equal("pickup_requires_qr");
+  });
+}

@@ -1,0 +1,34 @@
+meta {
+  name: GET active_orders_view (Admin)
+  type: http
+  seq: 1
+}
+
+get {
+  url: {{base_url}}/rest/v1/active_orders_view?select=order_code,customer_name,status,item_count,total_weight_kg,services&order=created_at.desc
+  body: none
+  auth: bearer
+}
+
+params:query {
+  select: order_code,customer_name,status,item_count,total_weight_kg,services
+  order: created_at.desc
+}
+
+headers {
+  apikey: {{publishable_key}}
+}
+
+auth:bearer {
+  token: {{admin_token}}
+}
+
+tests {
+  test("HTTP 200", function() {
+    expect(res.getStatus()).to.equal(200);
+  });
+  test("tidak memuat pesanan yang sudah diambil", function() {
+    res.getBody().forEach(o => expect(o.status).to.not.equal("diambil"));
+    expect(res.getBody().find(o => o.order_code === bru.getVar("order_code"))).to.equal(undefined);
+  });
+}

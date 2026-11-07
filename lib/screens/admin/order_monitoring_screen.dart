@@ -1,6 +1,13 @@
 import 'package:flutter/material.dart';
 import '../../models/order_model.dart';
+import '../../repositories/api_error.dart';
+import '../../repositories/order_repository.dart';
+import '../../utils/format_date.dart';
 import '../../utils/format_rupiah.dart';
+import '../../widgets/order_status_badge.dart';
+import '../../widgets/state_views.dart';
+import '../customer/order_detail_screen.dart';
+import 'qr_scan_screen.dart';
 
 class OrderMonitoringScreen extends StatefulWidget {
   const OrderMonitoringScreen({super.key});
@@ -10,77 +17,95 @@ class OrderMonitoringScreen extends StatefulWidget {
 }
 
 class _OrderMonitoringScreenState extends State<OrderMonitoringScreen> {
-  // simulasi Scanner input token QR
-  final TextEditingController _qrInputController = TextEditingController();
+  final OrderRepository _repository = OrderRepository.instance;
+
+  List<OrderModel> _orders = [];
   bool _isLoading = true; // status loading data awal
+  String? _errorMessage;
+  final Set<String> _updatingIds = {}; // pesanan yang sedang diubah statusnya
+  void Function()? _unsubscribe;
 
   // inisialisasi awal saat halaman dibuka (lifecycle on start)
   @override
   void initState() {
     super.initState();
-    _fetchMonitoringData();
+    _loadOrders();
+    // muat ulang otomatis jika ada pesanan yang berubah (Supabase Realtime)
+    _unsubscribe = _repository.watchOrders(_loadOrders);
   }
 
-  // fungsi asinkron memuat data monitoring pesanan
-  Future<void> _fetchMonitoringData() async {
-    await Future.delayed(const Duration(milliseconds: 500));
-    if (mounted) {
+  @override
+  void dispose() {
+    _unsubscribe?.call();
+    super.dispose();
+  }
+
+  // ambil semua pesanan (admin melihat semua karena RLS)
+  Future<void> _loadOrders() async {
+    try {
+      final orders = await _repository.fetchOrders();
+      if (!mounted) return;
       setState(() {
+        _orders = orders;
+        _errorMessage = null;
+        _isLoading = false;
+      });
+    } catch (e) {
+      debugPrint('Gagal memuat pesanan: $e');
+      if (!mounted) return;
+      setState(() {
+        _errorMessage = OrderRepository.errorMessage(e);
         _isLoading = false;
       });
     }
   }
 
-  // fungsi refresh asinkron
-  Future<void> _handleRefresh() async {
-    await Future.delayed(const Duration(milliseconds: 600));
-    if (mounted) {
-      setState(() {});
-    }
+  void _replaceOrder(OrderModel updated) {
+    final index = _orders.indexWhere((o) => o.id == updated.id);
+    if (index != -1) _orders[index] = updated;
   }
 
-  // Helper warna badge status
-  Color _getStatusColor(String status) {
-    switch (status) {
-      case 'diterima':
-        return Colors.blue;
-      case 'dicuci':
-        return Colors.orange;
-      case 'siap_diambil':
-        return Colors.green;
-      case 'diambil':
-        return Colors.grey;
-      default:
-        return Colors.black;
-    }
-  }
-
-  // PEMBARUAN STATUS SECARA ASINKRON
+  // PEMBARUAN STATUS lewat RPC sp_update_order_status (transisi divalidasi database)
   Future<void> _advanceOrderStatus(OrderModel order) async {
-    // simulasi jeda simpan status ke database
-    await Future.delayed(const Duration(milliseconds: 400));
-    if (!mounted) return;
-
-    setState(() {
-      if (order.status == 'diterima') {
-        order.status = 'dicuci';
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Pesanan ${order.id} status diubah ke: DICUCI')),
-        );
-      } else if (order.status == 'dicuci') {
-        order.status = 'siap_diambil';
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Pesanan ${order.id} siap diambil pelanggan!')),
-        );
-      }
-    });
+    final next = order.nextAdminStatus;
+    if (next == null) return;
+    setState(() => _updatingIds.add(order.id));
+    try {
+      final updated = await _repository.updateStatus(order.id, next);
+      if (!mounted) return;
+      setState(() {
+        _replaceOrder(updated);
+        _updatingIds.remove(order.id);
+      });
+      ScaffoldMessenger.of(context).hideCurrentSnackBar();
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Pesanan ${order.code} sekarang berstatus: ${updated.statusLabel}')),
+      );
+    } catch (e) {
+      debugPrint('Gagal mengubah status: $e');
+      if (!mounted) return;
+      setState(() => _updatingIds.remove(order.id));
+      ScaffoldMessenger.of(context).hideCurrentSnackBar();
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(backgroundColor: Colors.red, content: Text(OrderRepository.errorMessage(e))),
+      );
+      // status di layar mungkin sudah usang, muat ulang dari server
+      _loadOrders();
+    }
   }
 
-  // LOGIKA VERIFIKASI SCANNER QR PENGAMBILAN SECARA ASINKRON
-  Future<void> _verifyQRPickup(String token) async {
-    token = token.trim();
-    if (token.isEmpty) return;
+  // buka scanner, lalu verifikasi token ke server (sp_pickup_order)
+  Future<void> _openScanner() async {
+    final token = await Navigator.push<String>(
+      context,
+      MaterialPageRoute(builder: (_) => const QrScanScreen()),
+    );
+    if (token == null || token.isEmpty || !mounted) return;
+    await _verifyQRPickup(token);
+  }
 
+  // LOGIKA VERIFIKASI QR PENGAMBILAN: validasi & tandai token terpakai secara atomik di database
+  Future<void> _verifyQRPickup(String token) async {
     // tampilkan dialog loading proses verifikasi
     showDialog(
       context: context,
@@ -94,7 +119,7 @@ class _OrderMonitoringScreenState extends State<OrderMonitoringScreen> {
               children: [
                 CircularProgressIndicator(),
                 SizedBox(width: 16),
-                Text('Memverifikasi QR Token...'),
+                Text('Memverifikasi QR...'),
               ],
             ),
           ),
@@ -102,56 +127,37 @@ class _OrderMonitoringScreenState extends State<OrderMonitoringScreen> {
       ),
     );
 
-    // simulasi request validasi token ke server/database
-    await Future.delayed(const Duration(milliseconds: 800));
-
-    if (!mounted) return;
-    Navigator.pop(context); // tutup loading dialog
-
-    // Cari pesanan berdasarkan token QR
-    final orderIndex = OrderModel.dummyOrders.indexWhere((o) => o.pickupToken == token);
-
-    if (orderIndex == -1) {
-      _showScanResultDialog(
-        success: false,
-        title: 'QR Tidak Valid!',
-        message: 'Token QR tidak ditemukan dalam sistem.',
-      );
-      return;
-    }
-
-    final order = OrderModel.dummyOrders[orderIndex];
-
-    // Cek kondisi status
-    if (order.isCollected) {
-      _showScanResultDialog(
-        success: false,
-        title: 'QR Sudah Hangus!',
-        message: 'Cucian atas nama ${order.customerName} sudah pernah diambil sebelumnya.',
-      );
-    } else if (!order.isReadyForPickup) {
-      _showScanResultDialog(
-        success: false,
-        title: 'Cucian Belum Siap!',
-        message: 'Pesanan masih berstatus "${order.statusLabel}". Belum siap diambil.',
-      );
-    } else {
-      // berhasil diverifikasi, ubah status menjadi diambil
-      setState(() {
-        order.status = 'diambil';
-      });
+    try {
+      final order = await _repository.pickupByToken(token);
+      if (!mounted) return;
+      Navigator.pop(context); // tutup loading dialog
+      setState(() => _replaceOrder(order));
       _showScanResultDialog(
         success: true,
         title: 'Pengambilan Berhasil!',
-        message: 'Cucian untuk ${order.customerName} (${order.serviceName} - ${order.formattedWeight}) berhasil diserahkan!',
+        message: 'Cucian ${order.code} untuk ${order.customerName} '
+            '(${order.serviceName} - ${order.formattedWeight}) berhasil diserahkan.',
       );
+    } catch (e) {
+      debugPrint('Verifikasi QR gagal: $e');
+      if (!mounted) return;
+      Navigator.pop(context); // tutup loading dialog
+      // hint dikirim fungsi database untuk membedakan jenis penolakan
+      final title = switch (apiErrorHint(e)) {
+        'token_used' => 'QR Sudah Dipakai!',
+        'not_ready' => 'Cucian Belum Siap!',
+        'token_not_found' => 'QR Tidak Valid!',
+        _ => 'Verifikasi Gagal',
+      };
+      _showScanResultDialog(success: false, title: title, message: OrderRepository.errorMessage(e));
     }
+    _loadOrders();
   }
 
   void _showScanResultDialog({required bool success, required String title, required String message}) {
     showDialog(
       context: context,
-      builder: (_) => AlertDialog(
+      builder: (ctx) => AlertDialog(
         icon: Icon(
           success ? Icons.check_circle : Icons.error,
           color: success ? Colors.green : Colors.red,
@@ -160,85 +166,19 @@ class _OrderMonitoringScreenState extends State<OrderMonitoringScreen> {
         title: Text(title),
         content: Text(message, textAlign: TextAlign.center),
         actions: [
-          ElevatedButton(
-            onPressed: () => Navigator.pop(context),
-            child: const Text('OK'),
-          ),
+          ElevatedButton(onPressed: () => Navigator.pop(ctx), child: const Text('OK')),
         ],
-      ),
-    );
-  }
-
-  // dialog simulator scanner kamera
-  void _openScannerDialog() {
-    _qrInputController.clear();
-    showModalBottomSheet(
-      context: context,
-      isScrollControlled: true,
-      builder: (ctx) => Padding(
-        padding: EdgeInsets.only(
-          bottom: MediaQuery.of(ctx).viewInsets.bottom + 20,
-          left: 20,
-          right: 20,
-          top: 20,
-        ),
-        // dibungkus SingleChildScrollView agar tidak overflow saat keyboard muncul di landscape
-        child: SingleChildScrollView(
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: [
-              const Row(
-                children: [
-                  Icon(Icons.qr_code_scanner, color: Color(0xFF007BFF)),
-                  SizedBox(width: 8),
-                  Text('Scanner QR Pengambilan', style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
-                ],
-              ),
-              const SizedBox(height: 12),
-              const Text(
-                'Masukkan atau tempel Token QR pengambilan pelanggan:',
-                style: TextStyle(color: Colors.grey),
-              ),
-              const SizedBox(height: 12),
-              TextField(
-                controller: _qrInputController,
-                autofocus: true,
-                decoration: InputDecoration(
-                  hintText: 'Contoh: 000324',
-                  border: OutlineInputBorder(borderRadius: BorderRadius.circular(10)),
-                  prefixIcon: const Icon(Icons.qr_code),
-                ),
-              ),
-              const SizedBox(height: 16),
-              ElevatedButton(
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: const Color(0xFF007BFF),
-                  foregroundColor: Colors.white,
-                  padding: const EdgeInsets.symmetric(vertical: 14),
-                ),
-                onPressed: () {
-                  final token = _qrInputController.text;
-                  Navigator.pop(ctx);
-                  _verifyQRPickup(token);
-                },
-                child: const Text('Verifikasi Pengambilan'),
-              ),
-            ],
-          ),
-        ),
       ),
     );
   }
 
   @override
   Widget build(BuildContext context) {
-    // PERHITUNGAN LAPORAN
-    final activeOrders = OrderModel.dummyOrders.where((o) => o.status != 'diambil').length;
-    final completedOrders = OrderModel.dummyOrders.where((o) => o.status == 'diambil').length;
-    final totalRevenue = OrderModel.dummyOrders
-        .where((o) => o.status == 'diambil')
-        .fold(0.0, (sum, o) => sum + o.totalPrice);
+    // PERHITUNGAN LAPORAN dari data server
+    final active = _orders.where((o) => o.isActive).toList();
+    final completed = _orders.where((o) => o.isCollected).toList();
+    final totalRevenue = completed.fold(0.0, (sum, o) => sum + o.totalPrice);
+    final header = _buildReportCard(active.length, completed.length, totalRevenue);
 
     return DefaultTabController(
       length: 2,
@@ -255,7 +195,7 @@ class _OrderMonitoringScreenState extends State<OrderMonitoringScreen> {
         ),
         // tombol Scanner QR terbang
         floatingActionButton: FloatingActionButton.extended(
-          onPressed: _openScannerDialog,
+          onPressed: _openScanner,
           backgroundColor: const Color(0xFF007BFF),
           foregroundColor: Colors.white,
           icon: const Icon(Icons.qr_code_scanner),
@@ -267,23 +207,13 @@ class _OrderMonitoringScreenState extends State<OrderMonitoringScreen> {
             ? const Center(child: CircularProgressIndicator())
             : TabBarView(
                 children: [
-                  // cucian Aktif
                   RefreshIndicator(
-                    onRefresh: _handleRefresh,
-                    child: _buildOrderList(
-                      OrderModel.dummyOrders.where((o) => o.status != 'diambil').toList(),
-                      isActiveList: true,
-                      header: _buildReportCard(activeOrders, completedOrders, totalRevenue),
-                    ),
+                    onRefresh: _loadOrders,
+                    child: _buildOrderList(active, isActiveList: true, header: header),
                   ),
-                  // riwayat Selesai
                   RefreshIndicator(
-                    onRefresh: _handleRefresh,
-                    child: _buildOrderList(
-                      OrderModel.dummyOrders.where((o) => o.status == 'diambil').toList(),
-                      isActiveList: false,
-                      header: _buildReportCard(activeOrders, completedOrders, totalRevenue),
-                    ),
+                    onRefresh: _loadOrders,
+                    child: _buildOrderList(completed, isActiveList: false, header: header),
                   ),
                 ],
               ),
@@ -327,10 +257,7 @@ class _OrderMonitoringScreenState extends State<OrderMonitoringScreen> {
           const SizedBox(height: 4),
           FittedBox(
             fit: BoxFit.scaleDown,
-            child: Text(
-              value,
-              style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: color),
-            ),
+            child: Text(value, style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: color)),
           ),
         ],
       ),
@@ -338,6 +265,16 @@ class _OrderMonitoringScreenState extends State<OrderMonitoringScreen> {
   }
 
   Widget _buildOrderList(List<OrderModel> orders, {required bool isActiveList, required Widget header}) {
+    if (_errorMessage != null && _orders.isEmpty) {
+      return ErrorStateView(
+        message: _errorMessage!,
+        onRetry: () {
+          setState(() => _isLoading = true);
+          _loadOrders();
+        },
+      );
+    }
+
     if (orders.isEmpty) {
       // dibungkus ListView agar tetap bisa ditarik untuk refresh
       return ListView(
@@ -345,8 +282,10 @@ class _OrderMonitoringScreenState extends State<OrderMonitoringScreen> {
         padding: const EdgeInsets.all(12),
         children: [
           header,
-          const SizedBox(height: 60),
-          const Center(child: Text('Tidak ada pesanan')),
+          EmptyStateView(
+            message: isActiveList ? 'Tidak ada cucian aktif' : 'Belum ada pesanan yang selesai',
+            icon: isActiveList ? Icons.local_laundry_service_outlined : Icons.history,
+          ),
         ],
       );
     }
@@ -358,80 +297,87 @@ class _OrderMonitoringScreenState extends State<OrderMonitoringScreen> {
       itemCount: orders.length + 1,
       itemBuilder: (context, index) {
         if (index == 0) return header;
-        final order = orders[index - 1];
-        final statusColor = _getStatusColor(order.status);
+        return _buildOrderCard(orders[index - 1], isActiveList);
+      },
+    );
+  }
 
-        return Card(
-          margin: const EdgeInsets.only(bottom: 12),
-          child: Padding(
-            padding: const EdgeInsets.all(12.0),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                // baris Atas: Nama & Badge Status
-                Row(
-                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                  children: [
-                    Text(
+  Widget _buildOrderCard(OrderModel order, bool isActiveList) {
+    final isUpdating = _updatingIds.contains(order.id);
+    return Card(
+      margin: const EdgeInsets.only(bottom: 12),
+      child: InkWell(
+        borderRadius: BorderRadius.circular(12),
+        onTap: () => Navigator.push(
+          context,
+          MaterialPageRoute(builder: (_) => OrderDetailScreen(order: order, isAdmin: true)),
+        ),
+        child: Padding(
+          padding: const EdgeInsets.all(12.0),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              // baris atas: nama & badge status
+              Row(
+                children: [
+                  Expanded(
+                    child: Text(
                       order.customerName,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
                       style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
                     ),
-                    Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-                      decoration: BoxDecoration(
-                        color: statusColor.withValues(alpha: 0.15),
-                        borderRadius: BorderRadius.circular(20),
-                        border: Border.all(color: statusColor),
+                  ),
+                  OrderStatusBadge(status: order.status),
+                ],
+              ),
+              const SizedBox(height: 6),
+              Text('${order.code} • ${order.serviceName}'),
+              Text('${order.formattedWeight} • Total: ${order.formattedTotalPrice}'),
+              Text(
+                order.isCollected
+                    ? 'Diambil: ${formatDayTime(order.pickupTokenUsedAt!)}'
+                    : 'Estimasi selesai: ${formatDayTime(order.estimatedCompletionAt)}',
+                style: const TextStyle(fontSize: 12, color: Colors.grey),
+              ),
+
+              // tombol Update Status
+              if (isActiveList) ...[
+                const Divider(height: 20),
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.end,
+                  children: [
+                    if (isUpdating)
+                      const SizedBox(width: 24, height: 24, child: CircularProgressIndicator(strokeWidth: 2))
+                    else if (order.status == 'diterima')
+                      ElevatedButton.icon(
+                        onPressed: () => _advanceOrderStatus(order),
+                        icon: const Icon(Icons.waves, size: 16),
+                        label: const Text('Mulai Cuci'),
+                      )
+                    else if (order.status == 'dicuci')
+                      ElevatedButton.icon(
+                        style: ElevatedButton.styleFrom(backgroundColor: Colors.green, foregroundColor: Colors.white),
+                        onPressed: () => _advanceOrderStatus(order),
+                        icon: const Icon(Icons.check_circle_outline, size: 16),
+                        label: const Text('Siap Diambil'),
+                      )
+                    else if (order.isReadyForPickup)
+                      // Flexible agar teks turun ke baris baru di layar sempit
+                      const Flexible(
+                        child: Text(
+                          'Menunggu Scan QR Pelanggan',
+                          textAlign: TextAlign.right,
+                          style: TextStyle(fontStyle: FontStyle.italic, color: Colors.green),
+                        ),
                       ),
-                      child: Text(
-                        // menggunakan getter statusLabel dari model
-                        order.statusLabel,
-                        style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: statusColor),
-                      ),
-                    ),
                   ],
                 ),
-                const SizedBox(height: 6),
-                // menggunakan getter model formattedWeight dan formattedTotalPrice
-                Text('${order.serviceName} • ${order.formattedWeight} • Total: ${order.formattedTotalPrice}'),
-                Text('Token QR: ${order.pickupToken}', style: const TextStyle(fontSize: 12, color: Colors.grey)),
-                
-                // tombol Update Status
-                if (isActiveList) ...[
-                  const Divider(height: 20),
-                  Row(
-                    mainAxisAlignment: MainAxisAlignment.end,
-                    children: [
-                      if (order.status == 'diterima')
-                        ElevatedButton.icon(
-                          onPressed: () => _advanceOrderStatus(order),
-                          icon: const Icon(Icons.waves, size: 16),
-                          label: const Text('Mulai Cuci'),
-                        ),
-                      if (order.status == 'dicuci')
-                        ElevatedButton.icon(
-                          style: ElevatedButton.styleFrom(backgroundColor: Colors.green, foregroundColor: Colors.white),
-                          onPressed: () => _advanceOrderStatus(order),
-                          icon: const Icon(Icons.check_circle_outline, size: 16),
-                          label: const Text('Siap Diambil'),
-                        ),
-                      if (order.isReadyForPickup)
-                        // Flexible agar teks turun ke baris baru di layar sempit
-                        const Flexible(
-                          child: Text(
-                            'Menunggu Scan QR Pelanggan',
-                            textAlign: TextAlign.right,
-                            style: TextStyle(fontStyle: FontStyle.italic, color: Colors.green),
-                          ),
-                        ),
-                    ],
-                  ),
-                ],
               ],
-            ),
+            ],
           ),
-        );
-      },
+        ),
+      ),
     );
   }
 }

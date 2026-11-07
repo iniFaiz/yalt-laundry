@@ -1,0 +1,49 @@
+meta {
+  name: POST Tambah Layanan (Admin)
+  type: http
+  seq: 2
+}
+
+post {
+  url: {{base_url}}/rest/v1/services?select=id,name,price_per_kg,is_active,duration_hours
+  body: json
+  auth: bearer
+}
+
+params:query {
+  select: id,name,price_per_kg,is_active,duration_hours
+}
+
+headers {
+  apikey: {{publishable_key}}
+  Prefer: return=representation
+}
+
+auth:bearer {
+  token: {{admin_token}}
+}
+
+body:json {
+  {
+    "name": "{{temp_service_name}}",
+    "price_per_kg": 7000,
+    "duration_hours": 24
+  }
+}
+
+script:pre-request {
+  bru.setVar("temp_service_name", "Tes Bruno " + Date.now());
+}
+
+script:post-response {
+  bru.setVar("temp_service_id", res.getBody()[0].id);
+}
+
+tests {
+  test("HTTP 201", function() {
+    expect(res.getStatus()).to.equal(201);
+  });
+  test("layanan baru aktif", function() {
+    expect(res.getBody()[0].is_active).to.equal(true);
+  });
+}

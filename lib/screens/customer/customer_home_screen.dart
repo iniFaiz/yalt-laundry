@@ -3,6 +3,11 @@ import '../../models/order_model.dart';
 import '../../models/customer_model.dart';
 import '../../models/service_model.dart';
 import '../../repositories/auth_repository.dart';
+import '../../repositories/order_repository.dart';
+import '../../repositories/service_repository.dart';
+import '../../utils/format_date.dart';
+import '../../widgets/order_status_badge.dart';
+import '../../widgets/state_views.dart';
 import '../login_screen.dart';
 import 'order_detail_screen.dart';
 import 'profile_screen.dart';
@@ -24,6 +29,10 @@ class _CustomerHomeScreenState extends State<CustomerHomeScreen> with WidgetsBin
   // index untuk bottom navbar
   int _currentIndex = 0;
   bool _isLoading = true; // status loading data awal
+  String? _errorMessage;
+  List<OrderModel> _orders = [];
+  List<ServiceModel> _services = [];
+  void Function()? _unsubscribe;
 
   // inisialisasi awal saat widget pertama kali dimuat (lifecycle on start)
   @override
@@ -31,13 +40,16 @@ class _CustomerHomeScreenState extends State<CustomerHomeScreen> with WidgetsBin
     super.initState();
     // daftarkan observer lifecycle aplikasi
     WidgetsBinding.instance.addObserver(this);
-    _loadInitialOrders();
+    _loadData();
+    // status cucian berubah di server (admin update / scan QR) -> muat ulang otomatis
+    _unsubscribe = OrderRepository.instance.watchOrders(_loadData, customerId: widget.customer.id);
   }
 
-  // observer dilepas saat halaman ditutup (lifecycle on destroy)
+  // observer & langganan realtime dilepas saat halaman ditutup (lifecycle on destroy)
   @override
   void dispose() {
     WidgetsBinding.instance.removeObserver(this);
+    _unsubscribe?.call();
     super.dispose();
   }
 
@@ -56,33 +68,40 @@ class _CustomerHomeScreenState extends State<CustomerHomeScreen> with WidgetsBin
 
   // fungsi asinkron muat ulang data saat aplikasi kembali dibuka
   Future<void> _reloadOnResume() async {
-    await _handleRefresh();
-    if (mounted) {
+    await _loadData();
+    if (mounted && _errorMessage == null) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text('Status cucian diperbarui')),
       );
     }
   }
 
-  // fungsi asinkron memuat data awal cucian pelanggan
-  Future<void> _loadInitialOrders() async {
-    // simulasi jeda asinkron load data dari server
-    await Future.delayed(const Duration(milliseconds: 600));
-    if (mounted) {
+  // ambil pesanan milik pelanggan (dibatasi RLS) dan katalog layanan dari Supabase
+  Future<void> _loadData() async {
+    try {
+      final results = await Future.wait([
+        OrderRepository.instance.fetchOrders(customerId: widget.customer.id),
+        ServiceRepository.instance.fetchServices(),
+      ]);
+      if (!mounted) return;
       setState(() {
+        _orders = results[0] as List<OrderModel>;
+        _services = (results[1] as List<ServiceModel>).where((s) => s.isActive).toList();
+        _errorMessage = null;
+        _isLoading = false;
+      });
+    } catch (e) {
+      debugPrint('Gagal memuat data pelanggan: $e');
+      if (!mounted) return;
+      setState(() {
+        _errorMessage = OrderRepository.errorMessage(e);
         _isLoading = false;
       });
     }
   }
 
   // fungsi asinkron untuk refresh data saat ditarik ke bawah
-  Future<void> _handleRefresh() async {
-    // simulasi pembaruan data terbaru
-    await Future.delayed(const Duration(milliseconds: 700));
-    if (mounted) {
-      setState(() {});
-    }
-  }
+  Future<void> _handleRefresh() => _loadData();
 
   // dialog konfirmasi keluar akun
   void _confirmLogout() {
@@ -124,13 +143,9 @@ class _CustomerHomeScreenState extends State<CustomerHomeScreen> with WidgetsBin
 
   @override
   Widget build(BuildContext context) {
-    // filter hanya ambil cucian milik nomor hp pelanggan yang sedang login
-    final myOrders = OrderModel.dummyOrders
-        .where((o) => o.customerPhone == widget.customer.phone)
-        .toList();
-
-    final activeOrders = myOrders.where((o) => o.status != 'diambil').toList();
-    final pastOrders = myOrders.where((o) => o.status == 'diambil').toList();
+    // pesanan sudah difilter server (RLS hanya mengembalikan milik pelanggan ini)
+    final activeOrders = _orders.where((o) => o.isActive).toList();
+    final pastOrders = _orders.where((o) => o.isCollected).toList();
 
     return Scaffold(
       backgroundColor: const Color(0xFFF8F9FA), // latar belakang abu sangat lembut
@@ -179,12 +194,20 @@ class _CustomerHomeScreenState extends State<CustomerHomeScreen> with WidgetsBin
           ? const Center(child: CircularProgressIndicator())
           // tab profil tidak perlu tarik untuk refresh
           : _currentIndex == 2
-              ? ProfileScreen(customer: widget.customer)
+              ? ProfileScreen(customer: widget.customer, orderCount: _orders.length)
               : RefreshIndicator(
                   onRefresh: _handleRefresh,
-                  child: _currentIndex == 0
-                      ? _buildHomeTab(activeOrders)
-                      : _buildHistoryTab(pastOrders),
+                  child: _errorMessage != null && _orders.isEmpty
+                      ? ErrorStateView(
+                          message: _errorMessage!,
+                          onRetry: () {
+                            setState(() => _isLoading = true);
+                            _loadData();
+                          },
+                        )
+                      : _currentIndex == 0
+                          ? _buildHomeTab(activeOrders)
+                          : _buildHistoryTab(pastOrders),
                 ),
 
       // bottom navigation bar material 3
@@ -305,7 +328,7 @@ class _CustomerHomeScreenState extends State<CustomerHomeScreen> with WidgetsBin
 
         // daftar kartu pesanan aktif (ListView)
         if (activeOrders.isEmpty)
-          _buildEmptyState('Tidak ada cucian aktif saat ini.', Icons.dry_cleaning_outlined)
+          const EmptyStateView(message: 'Tidak ada cucian aktif saat ini.', icon: Icons.dry_cleaning_outlined)
         else
           ...activeOrders.map((order) => _buildModernOrderCard(order, isActive: true)),
       ],
@@ -315,7 +338,10 @@ class _CustomerHomeScreenState extends State<CustomerHomeScreen> with WidgetsBin
   // widget gridview untuk daftar paket layanan 2 kolom
   Widget _buildServiceGrid() {
     // hanya tampilkan layanan yang masih aktif
-    final services = ServiceModel.dummyServices.where((s) => s.isActive).toList();
+    final services = _services;
+    if (services.isEmpty) {
+      return const EmptyStateView(message: 'Belum ada layanan tersedia', icon: Icons.local_laundry_service_outlined);
+    }
 
     return GridView.builder(
       shrinkWrap: true,
@@ -397,7 +423,7 @@ class _CustomerHomeScreenState extends State<CustomerHomeScreen> with WidgetsBin
       return ListView(
         physics: const AlwaysScrollableScrollPhysics(),
         children: [
-          _buildEmptyState('Belum ada riwayat pesanan yang selesai.', Icons.history_rounded),
+          const EmptyStateView(message: 'Belum ada riwayat pesanan yang selesai.', icon: Icons.history_rounded),
         ],
       );
     }
@@ -418,27 +444,6 @@ class _CustomerHomeScreenState extends State<CustomerHomeScreen> with WidgetsBin
 
   // kartu pesanan
   Widget _buildModernOrderCard(OrderModel order, {required bool isActive}) {
-    Color statusBg;
-    Color statusTextColor;
-
-    switch (order.status) {
-      case 'diterima':
-        statusBg = const Color(0xFFE3F2FD);
-        statusTextColor = const Color(0xFF1976D2);
-        break;
-      case 'dicuci':
-        statusBg = const Color(0xFFFFF3E0);
-        statusTextColor = const Color(0xFFE65100);
-        break;
-      case 'siap_diambil':
-        statusBg = const Color(0xFFE8F5E9);
-        statusTextColor = const Color(0xFF2E7D32);
-        break;
-      default:
-        statusBg = const Color(0xFFF5F5F5);
-        statusTextColor = Colors.black54;
-    }
-
     return Container(
       margin: const EdgeInsets.only(bottom: 14),
       decoration: BoxDecoration(
@@ -458,9 +463,9 @@ class _CustomerHomeScreenState extends State<CustomerHomeScreen> with WidgetsBin
                 builder: (context) => OrderDetailScreen(order: order),
               ),
             );
-            // setelah kembali (pop) dari detail, refresh tampilan status
+            // setelah kembali (pop) dari detail, muat ulang status terbaru
             if (mounted) {
-              setState(() {});
+              _loadData();
             }
           },
           child: Padding(
@@ -472,22 +477,16 @@ class _CustomerHomeScreenState extends State<CustomerHomeScreen> with WidgetsBin
                 Row(
                   mainAxisAlignment: MainAxisAlignment.spaceBetween,
                   children: [
-                    Text(
-                      order.id,
-                      style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 14, color: Colors.black87),
-                    ),
-                    Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-                      decoration: BoxDecoration(
-                        color: statusBg,
-                        borderRadius: BorderRadius.circular(8),
-                      ),
-                      // menggunakan getter statusLabel dari model
+                    Flexible(
                       child: Text(
-                        order.statusLabel,
-                        style: TextStyle(color: statusTextColor, fontSize: 12, fontWeight: FontWeight.bold),
+                        order.code,
+                        overflow: TextOverflow.ellipsis,
+                        style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 14, color: Colors.black87),
                       ),
                     ),
+                    const SizedBox(width: 8),
+                    // status ditampilkan dengan teks + ikon + warna
+                    Flexible(child: OrderStatusBadge(status: order.status)),
                   ],
                 ),
 
@@ -505,18 +504,24 @@ class _CustomerHomeScreenState extends State<CustomerHomeScreen> with WidgetsBin
                       child: const Icon(Icons.local_laundry_service, color: Color(0xFF007BFF), size: 18),
                     ),
                     const SizedBox(width: 10),
-                    Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(
-                          order.serviceName,
-                          style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w600),
-                        ),
-                        Text(
-                          order.formattedWeight,
-                          style: const TextStyle(fontSize: 12, color: Colors.grey),
-                        ),
-                      ],
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            order.serviceName,
+                            maxLines: 2,
+                            overflow: TextOverflow.ellipsis,
+                            style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w600),
+                          ),
+                          Text(
+                            isActive
+                                ? '${order.formattedWeight} • Estimasi ${formatDayTime(order.estimatedCompletionAt)}'
+                                : '${order.formattedWeight} • Diambil ${formatDayTime(order.pickupTokenUsedAt!)}',
+                            style: const TextStyle(fontSize: 12, color: Colors.grey),
+                          ),
+                        ],
+                      ),
                     ),
                   ],
                 ),
@@ -562,20 +567,6 @@ class _CustomerHomeScreenState extends State<CustomerHomeScreen> with WidgetsBin
             ),
           ),
         ),
-      ),
-    );
-  }
-
-  Widget _buildEmptyState(String message, IconData icon) {
-    return Container(
-      padding: const EdgeInsets.symmetric(vertical: 40),
-      alignment: Alignment.center,
-      child: Column(
-        children: [
-          Icon(icon, size: 48, color: Colors.grey.shade300),
-          const SizedBox(height: 10),
-          Text(message, style: TextStyle(color: Colors.grey.shade500, fontSize: 13)),
-        ],
       ),
     );
   }

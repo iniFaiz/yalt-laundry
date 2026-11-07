@@ -1,17 +1,130 @@
-# my_app
+# YALT — Yet Another Laundry Tracking
 
-A new Flutter project.
+Aplikasi Android (Flutter + Material 3) untuk melacak pesanan laundry di satu outlet, dengan dua peran: **admin/kasir** dan **pelanggan**. Backend memakai **Supabase** (PostgreSQL, Auth, Row Level Security, Database Functions, Realtime). Pengujian API dilakukan dengan **Bruno**.
 
-## Getting Started
+## Fitur
 
-This project is a starting point for a Flutter application.
+**Admin / kasir**
+- Kasir POS: pilih/daftarkan pelanggan, isi beberapa layanan + berat per pesanan, lihat total, lalu simpan secara atomik dan tampilkan struk digital.
+- Monitoring: daftar cucian aktif dan riwayat selesai, laporan ringkas (jumlah aktif, jumlah selesai, omzet), serta tombol *Mulai Cuci* dan *Siap Diambil*.
+- **Scan QR pengambilan** dengan kamera (ada input manual sebagai cadangan). QR hanya bisa dipakai sekali.
+- Kelola pelanggan (buat akun login, ubah, hapus) dan layanan (tarif per kg, estimasi jam, aktif/nonaktif, hapus aman).
 
-A few resources to get you started if this is your first Flutter project:
+**Pelanggan**
+- Beranda: katalog layanan dan cucian yang sedang berjalan beserta estimasi selesai.
+- Detail pesanan: **timeline status beranimasi** dengan waktu tiap langkah, **QR pengambilan** (aktif saat siap diambil), dan **struk digital**.
+- Riwayat pesanan serta profil (jumlah pesanan, ganti password).
+- Status diperbarui otomatis (Supabase Realtime), saat halaman dibuka, saat layar ditarik ke bawah, dan saat aplikasi dibuka kembali.
 
-- [Learn Flutter](https://docs.flutter.dev/get-started/learn-flutter)
-- [Write your first Flutter app](https://docs.flutter.dev/get-started/codelab)
-- [Flutter learning resources](https://docs.flutter.dev/reference/learning-resources)
+**Alur status**: `diterima → dicuci → siap_diambil → diambil`. Status `diambil` **hanya** bisa dicapai lewat scan QR. Semua aturan ini divalidasi di database.
 
-For help getting started with Flutter development, view the
-[online documentation](https://docs.flutter.dev/), which offers tutorials,
-samples, guidance on mobile development, and a full API reference.
+## Struktur proyek
+
+```
+lib/
+  config/env.dart            URL & key Supabase dari --dart-define-from-file=.env
+  models/                    OrderModel, CustomerModel, ServiceModel
+  repositories/              satu-satunya lapisan yang memanggil Supabase
+  screens/admin/             POS, monitoring, scan QR, pelanggan, layanan
+  screens/customer/          beranda, detail pesanan (timeline/QR/struk), profil
+  widgets/                   badge status, struk, form pelanggan, state kosong/error
+supabase/
+  migrations/                semua objek SQL (tabel, RLS, fungsi, trigger, view)
+  seed.sql                   layanan + akun demo
+  tests/order_flow_test.sql  35 tes SQL (rollback otomatis)
+bruno/                       koleksi API (48 request, 109 tes) + run-tests.mjs
+docs/                        database.md, integrasi-api-supabase.md, diagram, evidence/
+test/                        tes unit, widget (backend palsu), integrasi (Supabase asli)
+```
+
+## Akun demo
+
+Login memakai **nomor HP + password**. Semua akun memakai password `ayamgoreng`.
+
+| Peran | Nomor HP | Nama |
+|---|---|---|
+| Admin | 081111111111 | Admin YALT |
+| Pelanggan | 081234567890 | Prabowo |
+| Pelanggan | 089876543210 | Jokowi |
+
+## 1. Konfigurasi Supabase
+
+1. Buat proyek di [supabase.com](https://supabase.com).
+2. Buka **SQL Editor**, lalu jalankan secara berurutan:
+   1. `supabase/migrations/20261103000000_create_services.sql`
+   2. `supabase/migrations/20261103010000_create_profiles_and_service_admin_policies.sql`
+   3. `supabase/migrations/20261107000000_create_orders.sql`
+   4. `supabase/migrations/20261107010000_customer_management_and_service_delete.sql`
+   5. `supabase/migrations/20261107020000_security_hardening.sql`
+   6. `supabase/seed.sql`
+3. Verifikasi: jalankan `supabase/tests/order_flow_test.sql`. Semua 35 baris harus `LULUS`. Data tes dibatalkan otomatis.
+4. Di **Authentication → Sign In / Providers**, matikan *Allow new users to sign up* (akun pelanggan dibuat oleh admin).
+
+Penjelasan lengkap setiap objek database, termasuk backup/restore, ada di [docs/database.md](docs/database.md).
+
+## 2. Menjalankan aplikasi
+
+```bash
+cp .env.example .env    # isi SUPABASE_URL dan SUPABASE_PUBLISHABLE_KEY (Project Settings → API Keys)
+flutter pub get
+flutter run --dart-define-from-file=.env
+```
+
+Jangan pernah mengisi *secret/service_role key* di `.env`. Aplikasi hanya memakai *publishable key*, dan semua hak akses dijaga oleh RLS serta fungsi database.
+
+## 3. Pengujian
+
+```bash
+flutter analyze
+flutter test test/model_test.dart test/widget_test.dart                       # tanpa internet (backend palsu)
+flutter test test/order_repository_test.dart test/service_repository_test.dart --dart-define-from-file=.env
+node bruno/run-tests.mjs                                                         # koleksi Bruno ke Supabase
+```
+
+- Tes integrasi dan Bruno **membuat pesanan sungguhan** di database sebagai bukti alur demo (pesanan tidak dihapus).
+- `bruno/run-tests.mjs` membaca `.env`, menjalankan `@usebruno/cli`, lalu menyimpan laporan (token login disensor) ke `docs/evidence/bruno-report.html|json`.
+- Untuk membuka koleksi di aplikasi Bruno: *Open Collection → folder `bruno/`*, pilih environment **Supabase**, lalu isi secret `base_url` dan `publishable_key`.
+
+Cakupan Bruno: login (sukses/gagal), CRUD layanan + RLS, pembuatan pesanan atomik, RLS antarpelanggan, kolom `pickup_token` yang tidak bisa dibaca, transisi status tidak valid, QR (token salah, belum siap, dipakai ulang, bukan admin), rollback transaksi, view/laporan, kelola pelanggan, dan akses tanpa login.
+
+## 4. Build Android & kesiapan Play Store
+
+```bash
+flutter build appbundle --release --dart-define-from-file=.env
+```
+
+Daftar periksa sebelum unggah ke Play Console:
+
+- [ ] Ganti `applicationId` di `android/app/build.gradle.kts` (sekarang `com.example.my_app`; ID berawalan `com.example` ditolak Play Store) dan sesuaikan package `MainActivity`.
+- [ ] Buat *upload keystore* (`keytool -genkey -v -keystore upload-keystore.jks -keyalg RSA -keysize 2048 -validity 10000 -alias upload`), simpan `android/key.properties` (jangan di-commit), lalu atur `signingConfigs.release`. Saat ini build release masih ditandatangani dengan debug key.
+- [ ] Naikkan `version:` di `pubspec.yaml` setiap rilis.
+- [x] Izin `INTERNET` ada di manifest utama. Izin `CAMERA` ditambahkan otomatis oleh `mobile_scanner` dengan `android.hardware.camera` `required=false`.
+- [x] Orientasi dikunci portrait dan nama aplikasi "Yalt" sudah diatur.
+- [ ] Periksa ikon launcher (`android/app/src/main/res/mipmap-*`) agar memakai logo YALT, bukan ikon bawaan Flutter.
+- [ ] Siapkan kebijakan privasi (aplikasi menyimpan nama & nomor HP, dan memakai kamera untuk scan QR), formulir *Data safety*, screenshot, serta ikon 512 px.
+
+## 5. Alur demo
+
+1. Login **admin** → tab *Kasir POS* → pilih *Prabowo*, tambah layanan & berat → **Buat Pesanan** → struk muncul (misalnya `ORD-000xx`).
+2. Login **pelanggan** (081234567890) di perangkat lain → buka pesanan → timeline *Diterima* dan estimasi selesai.
+3. Admin → *Monitoring* → **Mulai Cuci** → **Siap Diambil**. Timeline pelanggan ikut berubah (Realtime) dan QR menjadi aktif.
+4. Admin → **Scan QR Pickup** → arahkan kamera ke QR pelanggan → *Pengambilan Berhasil*. Scan ulang QR yang sama ditolak: *QR Sudah Dipakai*.
+5. Pesanan pindah ke *Riwayat Selesai* di sisi admin dan pelanggan.
+
+## Keamanan sebelum rilis
+
+- Supabase Security Advisor: 0 error. Sisa warning dijelaskan di [docs/database.md](docs/database.md#9-hardening-supabase-security-advisor).
+- **Ganti password akun admin demo** (`081111111111` / `ayamgoreng` tertulis di repo) dan password awal pelanggan (`CustomerRepository.defaultPassword` dan default `p_password` di `admin_create_customer`) sebelum aplikasi dipakai publik.
+- **Matikan pendaftaran publik** (*Authentication → Sign In / Providers → Allow new users to sign up*), karena akun pelanggan dibuat oleh admin.
+- Aktifkan *Leaked password protection* (*Authentication → Attack Protection*) bila paket proyek mendukung.
+
+## Keterbatasan yang diketahui
+
+- Sesi login belum diingat setelah aplikasi ditutup.
+- Akun pelanggan dibuat dengan menulis langsung ke `auth.users` dari fungsi database (pola yang sama dengan seed). Cara ini praktis tanpa Edge Function, tetapi bergantung pada struktur tabel internal Supabase Auth.
+- Login nomor HP dipetakan ke email internal `<nomor>@yalt.test` (tanpa OTP SMS).
+- Prosedur backup/restore sudah didokumentasikan tetapi belum diuji pada proyek terpisah.
+- Scan QR lewat **kamera** belum diuji di HP sungguhan (pengujian memakai input manual karena kamera browser diblokir). QR yang ditampilkan sudah dipastikan bisa di-*decode*.
+- Pesan error dari database memakai jam WIB, sedangkan aplikasi menampilkan jam sesuai zona waktu perangkat.
+
+Bukti pengujian (screenshot alur demo ORD-00020, laporan Bruno, log tes) ada di [docs/evidence](docs/evidence/README.md).

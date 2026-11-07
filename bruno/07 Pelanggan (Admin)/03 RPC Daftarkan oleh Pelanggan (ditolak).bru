@@ -1,0 +1,35 @@
+meta {
+  name: RPC Daftarkan oleh Pelanggan (ditolak)
+  type: http
+  seq: 3
+}
+
+post {
+  url: {{base_url}}/rest/v1/rpc/admin_create_customer
+  body: json
+  auth: bearer
+}
+
+headers {
+  apikey: {{publishable_key}}
+}
+
+auth:bearer {
+  token: {{customer_a_token}}
+}
+
+body:json {
+  {
+    "p_full_name": "Penyusup",
+    "p_phone": "089911112222"
+  }
+}
+
+tests {
+  test("HTTP 403", function() {
+    expect(res.getStatus()).to.equal(403);
+  });
+  test("kode error 42501", function() {
+    expect(res.getBody().code).to.equal("42501");
+  });
+}

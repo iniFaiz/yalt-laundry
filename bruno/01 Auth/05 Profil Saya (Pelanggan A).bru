@@ -1,0 +1,35 @@
+meta {
+  name: Profil Saya (Pelanggan A)
+  type: http
+  seq: 5
+}
+
+get {
+  url: {{base_url}}/rest/v1/profiles?select=id,full_name,phone,role
+  body: none
+  auth: bearer
+}
+
+params:query {
+  select: id,full_name,phone,role
+}
+
+headers {
+  apikey: {{publishable_key}}
+}
+
+auth:bearer {
+  token: {{customer_a_token}}
+}
+
+tests {
+  test("HTTP 200", function() {
+    expect(res.getStatus()).to.equal(200);
+  });
+  test("RLS: hanya profil sendiri", function() {
+    const body = res.getBody();
+    expect(body).to.have.length(1);
+    expect(body[0].id).to.equal(bru.getVar("customer_a_id"));
+    expect(body[0].role).to.equal("customer");
+  });
+}

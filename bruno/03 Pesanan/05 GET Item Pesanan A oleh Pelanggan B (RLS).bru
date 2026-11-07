@@ -1,0 +1,33 @@
+meta {
+  name: GET Item Pesanan A oleh Pelanggan B (RLS)
+  type: http
+  seq: 5
+}
+
+get {
+  url: {{base_url}}/rest/v1/order_items?order_id=eq.{{order_id}}&select=id
+  body: none
+  auth: bearer
+}
+
+params:query {
+  order_id: eq.{{order_id}}
+  select: id
+}
+
+headers {
+  apikey: {{publishable_key}}
+}
+
+auth:bearer {
+  token: {{customer_b_token}}
+}
+
+tests {
+  test("HTTP 200", function() {
+    expect(res.getStatus()).to.equal(200);
+  });
+  test("RLS: item pesanan orang lain kosong", function() {
+    expect(res.getBody()).to.have.length(0);
+  });
+}

@@ -11,10 +11,10 @@ class ServiceScreen extends StatefulWidget {
 }
 
 class _ServiceScreenState extends State<ServiceScreen> {
-  final ServiceRepository _repository = ServiceRepository();
+  final ServiceRepository _repository = ServiceRepository.instance;
 
-  // list layanan yang dipakai bersama halaman lain, isinya diganti dengan data dari API
-  final List<ServiceModel> _services = ServiceModel.dummyServices;
+  // list layanan, isinya diambil dari API
+  final List<ServiceModel> _services = [];
 
   bool _isLoading = true;
   bool _isSaving = false; // true saat menunggu respon simpan dari API
@@ -58,22 +58,29 @@ class _ServiceScreenState extends State<ServiceScreen> {
   // controller untuk dialog tambah layanan
   final TextEditingController _nameController = TextEditingController();
   final TextEditingController _priceController = TextEditingController();
+  final TextEditingController _durationController = TextEditingController();
 
   @override
   void dispose() {
     // controller dibersihkan agar tidak memory leak
     _nameController.dispose();
     _priceController.dispose();
+    _durationController.dispose();
     super.dispose();
   }
 
   // jalankan request simpan ke API, tampilkan pesan sukses / gagal
-  Future<void> _save(Future<void> Function() request, String successMessage) async {
+  Future<void> _save(
+    Future<void> Function() request,
+    String successMessage, {
+    String Function()? successMessageBuilder,
+  }) async {
     setState(() => _isSaving = true);
     String message = successMessage;
     bool success = true;
     try {
       await request();
+      if (successMessageBuilder != null) message = successMessageBuilder();
     } catch (e) {
       debugPrint('Gagal menyimpan layanan: $e');
       message = ServiceRepository.errorMessage(e);
@@ -86,9 +93,9 @@ class _ServiceScreenState extends State<ServiceScreen> {
         .showSnackBar(SnackBar(backgroundColor: success ? Colors.green : Colors.red, content: Text(message)));
   }
 
-  // dialog form nama & tarif, hasil pop berisi (nama, tarif) atau null jika batal
-  Future<(String, double)?> _showServiceDialog({required String title, required String nameLabel}) {
-    return showDialog<(String, double)>(
+  // dialog form nama, tarif & estimasi, hasil pop berisi (nama, tarif, jam) atau null jika batal
+  Future<(String, double, int)?> _showServiceDialog({required String title, required String nameLabel}) {
+    return showDialog<(String, double, int)>(
       context: context,
       builder: (ctx) => AlertDialog(
         // isi dialog bisa di-scroll agar form tetap terlihat saat keyboard muncul (terutama landscape)
@@ -101,10 +108,11 @@ class _ServiceScreenState extends State<ServiceScreen> {
             onPressed: () {
               final name = _nameController.text.trim();
               final price = double.tryParse(_priceController.text) ?? 0.0;
+              final hours = int.tryParse(_durationController.text) ?? 0;
 
-              if (name.isNotEmpty && price > 0) {
+              if (name.isNotEmpty && price > 0 && hours >= 1 && hours <= 720) {
                 // kirim isian form ke halaman pemanggil lewat hasil pop
-                Navigator.pop(ctx, (name, price));
+                Navigator.pop(ctx, (name, price, hours));
               }
             },
             child: const Text('Simpan'),
@@ -118,6 +126,7 @@ class _ServiceScreenState extends State<ServiceScreen> {
   Future<void> _showAddServiceDialog() async {
     _nameController.clear();
     _priceController.clear();
+    _durationController.text = '48';
 
     final input = await _showServiceDialog(
       title: 'Tambah Layanan Baru',
@@ -126,7 +135,7 @@ class _ServiceScreenState extends State<ServiceScreen> {
     if (input == null || !mounted) return;
 
     await _save(() async {
-      final newService = await _repository.addService(input.$1, input.$2);
+      final newService = await _repository.addService(input.$1, input.$2, durationHours: input.$3);
       // tambah hasil dari server lalu setState biar ListView terupdate
       setState(() => _services.add(newService));
     }, 'Layanan "${input.$1}" berhasil ditambahkan');
@@ -137,12 +146,18 @@ class _ServiceScreenState extends State<ServiceScreen> {
     // isi form dengan data lama memakai getter
     _nameController.text = service.name;
     _priceController.text = service.pricePerKG.toStringAsFixed(0);
+    _durationController.text = service.durationHours.toString();
 
     final input = await _showServiceDialog(title: 'Ubah Layanan', nameLabel: 'Nama Layanan');
     if (input == null || !mounted) return;
 
     await _save(() async {
-      final updated = await _repository.updateService(service.id, name: input.$1, pricePerKG: input.$2);
+      final updated = await _repository.updateService(
+        service.id,
+        name: input.$1,
+        pricePerKG: input.$2,
+        durationHours: input.$3,
+      );
       _replaceService(updated);
     }, 'Layanan "${input.$1}" berhasil diubah');
   }
@@ -153,6 +168,47 @@ class _ServiceScreenState extends State<ServiceScreen> {
       final updated = await _repository.updateService(service.id, isActive: isActive);
       _replaceService(updated);
     }, isActive ? 'Layanan "${service.name}" diaktifkan' : 'Layanan "${service.name}" dinonaktifkan');
+  }
+
+  // hapus layanan: server menghapus permanen jika belum dipakai, atau menonaktifkan jika sudah dipakai
+  Future<void> _confirmDelete(ServiceModel service) async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('Hapus Layanan'),
+        content: Text(
+          'Hapus "${service.name}"? Jika layanan ini sudah pernah dipakai pesanan, '
+          'layanan hanya dinonaktifkan agar riwayat pesanan tetap utuh.',
+        ),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('Batal')),
+          ElevatedButton(
+            style: ElevatedButton.styleFrom(backgroundColor: Colors.red, foregroundColor: Colors.white),
+            onPressed: () => Navigator.pop(ctx, true),
+            child: const Text('Hapus'),
+          ),
+        ],
+      ),
+    );
+    if (confirmed != true || !mounted) return;
+
+    var message = '';
+    await _save(() async {
+      final action = await _repository.deleteService(service.id);
+      if (action == ServiceDeleteAction.deleted) {
+        setState(() => _services.removeWhere((s) => s.id == service.id));
+        message = 'Layanan "${service.name}" dihapus';
+      } else {
+        _replaceService(ServiceModel(
+          id: service.id,
+          name: service.name,
+          pricePerKG: service.pricePerKG,
+          durationHours: service.durationHours,
+          isActive: false,
+        ));
+        message = 'Layanan "${service.name}" sudah dipakai pesanan, jadi dinonaktifkan';
+      }
+    }, '', successMessageBuilder: () => message);
   }
 
   // ganti data layanan di list dengan hasil terbaru dari server
@@ -176,6 +232,16 @@ class _ServiceScreenState extends State<ServiceScreen> {
           controller: _priceController,
           keyboardType: TextInputType.number,
           decoration: const InputDecoration(labelText: 'Tarif per Kg (Rp)', prefixText: 'Rp '),
+        ),
+        const SizedBox(height: 12),
+        TextField(
+          controller: _durationController,
+          keyboardType: TextInputType.number,
+          decoration: const InputDecoration(
+            labelText: 'Estimasi Pengerjaan',
+            suffixText: 'jam',
+            helperText: 'Dipakai menghitung estimasi selesai (1 - 720 jam)',
+          ),
         ),
       ],
     );
@@ -262,11 +328,24 @@ class _ServiceScreenState extends State<ServiceScreen> {
                       ),
                     ),
                     // menggunakan getter formattedPrice dari model
-                    subtitle: Text(service.formattedPrice),
-                    trailing: Switch(
-                      value: service.isActive,
-                      // ubah status aktif/nonaktif layanan tanpa menghapus data
-                      onChanged: _isSaving ? null : (bool val) => _toggleActive(service, val),
+                    subtitle: Text(
+                      '${service.formattedPrice} • ±${service.formattedDuration}'
+                      '${service.isActive ? '' : ' • Nonaktif'}',
+                    ),
+                    trailing: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Switch(
+                          value: service.isActive,
+                          // ubah status aktif/nonaktif layanan tanpa menghapus data
+                          onChanged: _isSaving ? null : (bool val) => _toggleActive(service, val),
+                        ),
+                        IconButton(
+                          tooltip: 'Hapus Layanan',
+                          icon: const Icon(Icons.delete_outline, color: Colors.red),
+                          onPressed: _isSaving ? null : () => _confirmDelete(service),
+                        ),
+                      ],
                     ),
                   ),
                 );

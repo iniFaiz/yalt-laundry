@@ -65,13 +65,7 @@ class AuthRepository {
       await _client.auth.signOut();
       throw const AuthFailure('Profil akun tidak ditemukan. Hubungi admin.');
     }
-    return CustomerModel(
-      id: row['id'] as String,
-      name: row['full_name'] as String,
-      phone: row['phone'] as String,
-      // password tidak pernah diambil dari server
-      password: '',
-      role: row['role'] == 'admin' ? 'Admin' : 'Customer',
-    );
+    // password tidak pernah diambil dari server
+    return CustomerModel.fromJson(row);
   }
 }

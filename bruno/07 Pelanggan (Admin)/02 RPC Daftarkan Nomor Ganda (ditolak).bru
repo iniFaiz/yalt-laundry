@@ -1,0 +1,38 @@
+meta {
+  name: RPC Daftarkan Nomor Ganda (ditolak)
+  type: http
+  seq: 2
+}
+
+post {
+  url: {{base_url}}/rest/v1/rpc/admin_create_customer
+  body: json
+  auth: bearer
+}
+
+headers {
+  apikey: {{publishable_key}}
+}
+
+auth:bearer {
+  token: {{admin_token}}
+}
+
+body:json {
+  {
+    "p_full_name": "Pelanggan Ganda",
+    "p_phone": "{{new_phone}}"
+  }
+}
+
+tests {
+  test("HTTP 409", function() {
+    expect(res.getStatus()).to.equal(409);
+  });
+  test("kode error 23505", function() {
+    expect(res.getBody().code).to.equal("23505");
+  });
+  test("hint phone_taken", function() {
+    expect(res.getBody().hint).to.equal("phone_taken");
+  });
+}

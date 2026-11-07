@@ -1,0 +1,37 @@
+meta {
+  name: RPC Scan QR Token Salah
+  type: http
+  seq: 3
+}
+
+post {
+  url: {{base_url}}/rest/v1/rpc/sp_pickup_order
+  body: json
+  auth: bearer
+}
+
+headers {
+  apikey: {{publishable_key}}
+}
+
+auth:bearer {
+  token: {{admin_token}}
+}
+
+body:json {
+  {
+    "p_token": "00000000000000000000000000000000"
+  }
+}
+
+tests {
+  test("HTTP 404", function() {
+    expect(res.getStatus()).to.equal(404);
+  });
+  test("kode error PT404", function() {
+    expect(res.getBody().code).to.equal("PT404");
+  });
+  test("hint token_not_found", function() {
+    expect(res.getBody().hint).to.equal("token_not_found");
+  });
+}

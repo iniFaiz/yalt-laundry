@@ -1,57 +1,117 @@
 import '../utils/format_rupiah.dart';
+import '../utils/format_date.dart';
+
+// angka dari PostgREST bisa berupa num atau String (kolom numeric)
+double _toDouble(dynamic value) {
+  if (value is num) return value.toDouble();
+  if (value is String) return double.tryParse(value) ?? 0;
+  return 0;
+}
+
+DateTime? _toDate(dynamic value) => value == null ? null : DateTime.parse(value as String).toLocal();
+
+/// Satu baris layanan di dalam pesanan (tabel order_items).
+/// Nama & tarif disimpan sebagai snapshot saat pesanan dibuat.
+class OrderItemModel {
+  final String id;
+  final String serviceName;
+  final double weightKg;
+  final double pricePerKgSnapshot;
+  final double subtotal;
+
+  const OrderItemModel({
+    required this.id,
+    required this.serviceName,
+    required this.weightKg,
+    required this.pricePerKgSnapshot,
+    required this.subtotal,
+  });
+
+  String get formattedWeight => formatKg(weightKg);
+  String get formattedPricePerKg => '${formatRupiah(pricePerKgSnapshot)} / kg';
+  String get formattedSubtotal => formatRupiah(subtotal);
+
+  factory OrderItemModel.fromJson(Map<String, dynamic> json) {
+    return OrderItemModel(
+      id: json['id'] as String,
+      serviceName: json['service_name_snapshot'] as String,
+      weightKg: _toDouble(json['weight_kg']),
+      pricePerKgSnapshot: _toDouble(json['price_per_kg_snapshot']),
+      subtotal: _toDouble(json['subtotal']),
+    );
+  }
+}
+
+/// Satu perubahan status (tabel order_status_histories, diisi trigger database).
+class StatusHistoryModel {
+  final String? fromStatus;
+  final String toStatus;
+  final DateTime changedAt;
+
+  const StatusHistoryModel({this.fromStatus, required this.toStatus, required this.changedAt});
+
+  factory StatusHistoryModel.fromJson(Map<String, dynamic> json) {
+    return StatusHistoryModel(
+      fromStatus: json['from_status'] as String?,
+      toStatus: json['to_status'] as String,
+      changedAt: _toDate(json['changed_at'])!,
+    );
+  }
+}
+
+/// Input item saat admin membuat pesanan baru.
+class OrderItemInput {
+  final String serviceId;
+  final double weightKg;
+
+  const OrderItemInput({required this.serviceId, required this.weightKg});
+
+  Map<String, dynamic> toJson() => {'service_id': serviceId, 'weight_kg': weightKg};
+}
 
 class OrderModel {
-  // urutan alur status cucian yang sah
+  // urutan alur status cucian yang sah (divalidasi juga di database)
   static const List<String> statusFlow = ['diterima', 'dicuci', 'siap_diambil', 'diambil'];
 
   final String id;
+  final String code; // nomor pesanan yang mudah dibaca, contoh ORD-00001
+  final String customerId;
   final String customerName;
   final String customerPhone;
-  final String serviceName;
-  final double weight;
-  final double pricePerKgSnapshot;
+  final String status;
   final double totalPrice;
-  String _status; // private, diubah lewat setter status
-  final String pickupToken; // unique token qr
+  final String? notes;
+  final DateTime estimatedCompletionAt;
+  final DateTime? pickupTokenUsedAt;
   final DateTime createdAt;
+  final List<OrderItemModel> items;
+  final List<StatusHistoryModel> histories;
 
-  OrderModel({
+  const OrderModel({
     required this.id,
+    required this.code,
+    required this.customerId,
     required this.customerName,
     required this.customerPhone,
-    required this.serviceName,
-    required this.weight,
-    required this.pricePerKgSnapshot,
+    required this.status,
     required this.totalPrice,
-    required this._status, // dipanggil dengan nama parameter status
-    required this.pickupToken,
+    this.notes,
+    required this.estimatedCompletionAt,
+    this.pickupTokenUsedAt,
     required this.createdAt,
+    this.items = const [],
+    this.histories = const [],
   });
 
-  // getter status cucian
-  String get status => _status;
-
-  // setter status cucian, hanya boleh maju satu langkah sesuai alur statusFlow
-  set status(String value) {
-    final currentIndex = statusFlow.indexOf(_status);
-    final nextIndex = statusFlow.indexOf(value);
-    if (nextIndex != currentIndex + 1) {
-      throw ArgumentError('Transisi status $_status -> $value tidak valid');
-    }
-    _status = value;
+  // cek apakah perpindahan status from -> to sah (maju tepat satu langkah)
+  static bool isValidTransition(String from, String to) {
+    final fromIndex = statusFlow.indexOf(from);
+    final toIndex = statusFlow.indexOf(to);
+    return fromIndex != -1 && toIndex == fromIndex + 1;
   }
 
-  // getter format rupiah total harga
-  String get formattedTotalPrice => formatRupiah(totalPrice);
-
-  // getter format berat cucian
-  String get formattedWeight => '${weight.toStringAsFixed(1)} kg';
-
-  // getter format tarif snapshot per kg
-  String get formattedPricePerKg => '${formatRupiah(pricePerKgSnapshot)} / kg';
-
-  // getter label status yang mudah dibaca untuk ditampilkan di layar
-  String get statusLabel {
+  // label status yang mudah dibaca untuk ditampilkan di layar
+  static String labelOf(String status) {
     switch (status) {
       case 'diterima':
         return 'Diterima';
@@ -66,69 +126,66 @@ class OrderModel {
     }
   }
 
-  // getter cek apakah cucian siap diambil
+  String get statusLabel => labelOf(status);
+
+  // status berikutnya yang boleh diubah admin lewat tombol (diambil hanya lewat scan QR)
+  String? get nextAdminStatus {
+    switch (status) {
+      case 'diterima':
+        return 'dicuci';
+      case 'dicuci':
+        return 'siap_diambil';
+      default:
+        return null;
+    }
+  }
+
   bool get isReadyForPickup => status == 'siap_diambil';
-
-  // getter cek apakah cucian sudah selesai diambil
   bool get isCollected => status == 'diambil';
+  bool get isActive => !isCollected;
 
-  // konversi dari map json ke object model
+  // ringkasan nama layanan, contoh "Cuci Kering, Cuci Kilat"
+  String get serviceName => items.isEmpty ? '-' : items.map((i) => i.serviceName).join(', ');
+
+  // total berat semua item
+  double get weight => items.fold(0.0, (sum, i) => sum + i.weightKg);
+
+  String get formattedTotalPrice => formatRupiah(totalPrice);
+  String get formattedWeight => formatKg(weight);
+
+  // waktu saat pesanan mencapai status tertentu (dari riwayat), null jika belum
+  DateTime? reachedAt(String targetStatus) {
+    for (final h in histories) {
+      if (h.toStatus == targetStatus) return h.changedAt;
+    }
+    return null;
+  }
+
+  // konversi dari JSON PostgREST (select dengan embed customer, order_items, order_status_histories)
   factory OrderModel.fromJson(Map<String, dynamic> json) {
+    final customer = json['customer'] as Map<String, dynamic>?;
+    final items = (json['order_items'] as List<dynamic>? ?? const [])
+        .map((e) => OrderItemModel.fromJson(e as Map<String, dynamic>))
+        .toList();
+    final histories = (json['order_status_histories'] as List<dynamic>? ?? const [])
+        .map((e) => StatusHistoryModel.fromJson(e as Map<String, dynamic>))
+        .toList()
+      ..sort((a, b) => a.changedAt.compareTo(b.changedAt));
+
     return OrderModel(
       id: json['id'] as String,
-      customerName: json['customerName'] as String,
-      customerPhone: json['customerPhone'] as String,
-      serviceName: json['serviceName'] as String,
-      weight: (json['weight'] as num).toDouble(),
-      pricePerKgSnapshot: (json['pricePerKgSnapshot'] as num).toDouble(),
-      totalPrice: (json['totalPrice'] as num).toDouble(),
+      code: json['order_code'] as String,
+      customerId: json['customer_id'] as String,
+      customerName: customer?['full_name'] as String? ?? '-',
+      customerPhone: customer?['phone'] as String? ?? '-',
       status: json['status'] as String,
-      pickupToken: json['pickupToken'] as String,
-      createdAt: DateTime.parse(json['createdAt'] as String),
+      totalPrice: _toDouble(json['total_amount']),
+      notes: json['notes'] as String?,
+      estimatedCompletionAt: _toDate(json['estimated_completion_at'])!,
+      pickupTokenUsedAt: _toDate(json['pickup_token_used_at']),
+      createdAt: _toDate(json['created_at'])!,
+      items: items,
+      histories: histories,
     );
   }
-
-  // konversi dari object model ke map json
-  Map<String, dynamic> toJson() {
-    return {
-      'id': id,
-      'customerName': customerName,
-      'customerPhone': customerPhone,
-      'serviceName': serviceName,
-      'weight': weight,
-      'pricePerKgSnapshot': pricePerKgSnapshot,
-      'totalPrice': totalPrice,
-      'status': status,
-      'pickupToken': pickupToken,
-      'createdAt': createdAt.toIso8601String(),
-    };
-  }
-
-  // data dummy
-  static List<OrderModel> dummyOrders = [
-    OrderModel(
-      id: 'ORD-001',
-      customerName: 'Prabowo',
-      customerPhone: '081234567890',
-      serviceName: 'Cuci Setrika',
-      weight: 3.0,
-      pricePerKgSnapshot: 8000,
-      totalPrice: 24000,
-      status: 'dicuci',
-      pickupToken: '000324',
-      createdAt: DateTime.now().subtract(const Duration(hours: 3)),
-    ),
-    OrderModel(
-      id: 'ORD-002',
-      customerName: 'Jokowi',
-      customerPhone: '089876543210',
-      serviceName: 'Cuci Kering',
-      weight: 2.0,
-      pricePerKgSnapshot: 6000,
-      totalPrice: 12000,
-      status: 'siap_diambil',
-      pickupToken: '000234',
-      createdAt: DateTime.now().subtract(const Duration(hours: 5)),
-    ),
-  ];
 }

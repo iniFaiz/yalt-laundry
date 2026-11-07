@@ -1,0 +1,34 @@
+meta {
+  name: RPC Hapus Layanan Belum Dipakai (deleted)
+  type: http
+  seq: 6
+}
+
+post {
+  url: {{base_url}}/rest/v1/rpc/sp_delete_service
+  body: json
+  auth: bearer
+}
+
+headers {
+  apikey: {{publishable_key}}
+}
+
+auth:bearer {
+  token: {{admin_token}}
+}
+
+body:json {
+  {
+    "p_service_id": "{{temp_service_id}}"
+  }
+}
+
+tests {
+  test("HTTP 200", function() {
+    expect(res.getStatus()).to.equal(200);
+  });
+  test("layanan yang belum dipakai dihapus permanen", function() {
+    expect(res.getBody().action).to.equal("deleted");
+  });
+}

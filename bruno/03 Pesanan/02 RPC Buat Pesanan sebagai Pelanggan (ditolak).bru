@@ -1,0 +1,35 @@
+meta {
+  name: RPC Buat Pesanan sebagai Pelanggan (ditolak)
+  type: http
+  seq: 2
+}
+
+post {
+  url: {{base_url}}/rest/v1/rpc/sp_create_order
+  body: json
+  auth: bearer
+}
+
+headers {
+  apikey: {{publishable_key}}
+}
+
+auth:bearer {
+  token: {{customer_a_token}}
+}
+
+body:json {
+  {
+    "p_customer_id": "{{customer_a_id}}",
+    "p_items": [{ "service_id": "{{service_id}}", "weight_kg": 1 }]
+  }
+}
+
+tests {
+  test("HTTP 403", function() {
+    expect(res.getStatus()).to.equal(403);
+  });
+  test("kode error 42501", function() {
+    expect(res.getBody().code).to.equal("42501");
+  });
+}

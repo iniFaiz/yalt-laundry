@@ -1,0 +1,38 @@
+meta {
+  name: GET Pesanan Saya (Pelanggan A)
+  type: http
+  seq: 3
+}
+
+get {
+  url: {{base_url}}/rest/v1/orders?select=id,order_code,customer_id,status,total_amount,estimated_completion_at,pickup_token_used_at,order_items(service_name_snapshot,weight_kg,price_per_kg_snapshot,subtotal),order_status_histories(from_status,to_status,changed_at)&order=created_at.desc
+  body: none
+  auth: bearer
+}
+
+params:query {
+  select: id,order_code,customer_id,status,total_amount,estimated_completion_at,pickup_token_used_at,order_items(service_name_snapshot,weight_kg,price_per_kg_snapshot,subtotal),order_status_histories(from_status,to_status,changed_at)
+  order: created_at.desc
+}
+
+headers {
+  apikey: {{publishable_key}}
+}
+
+auth:bearer {
+  token: {{customer_a_token}}
+}
+
+tests {
+  test("HTTP 200", function() {
+    expect(res.getStatus()).to.equal(200);
+  });
+  test("pesanan baru terlihat oleh pemiliknya beserta item", function() {
+    const o = res.getBody().find(x => x.id === bru.getVar("order_id"));
+    expect(o).to.not.equal(undefined);
+    expect(o.order_items).to.have.length(2);
+  });
+  test("semua pesanan milik pelanggan A", function() {
+    res.getBody().forEach(o => expect(o.customer_id).to.equal(bru.getVar("customer_a_id")));
+  });
+}

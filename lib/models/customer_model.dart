@@ -2,15 +2,15 @@ class CustomerModel {
   final String id;
   String _name; // private, diubah lewat setter
   String _phone; // private, diubah lewat setter
-  String _password; // private, diubah lewat setter
   final String role; // 'Customer' atau 'Admin'
+  final int orderCount; // jumlah pesanan (dari customer_summary_view)
 
   CustomerModel({
     required this.id,
     required this._name, // dipanggil dengan nama parameter name
     required this._phone, // dipanggil dengan nama parameter phone
-    this._password = 'ayamgoreng', // dipanggil dengan nama parameter password
     this.role = 'Customer',
+    this.orderCount = 0,
   });
 
   // getter nama pelanggan
@@ -35,18 +35,6 @@ class CustomerModel {
       throw ArgumentError(error);
     }
     _phone = value.trim();
-  }
-
-  // getter password akun
-  String get password => _password;
-
-  // setter password akun, divalidasi dulu sebelum disimpan
-  set password(String value) {
-    final error = validatePassword(value);
-    if (error != null) {
-      throw ArgumentError(error);
-    }
-    _password = value;
   }
 
   // validasi password baru, minimal 6 karakter tanpa spasi
@@ -74,7 +62,7 @@ class CustomerModel {
     return null;
   }
 
-  // validasi format nomor hp (diawali 08, 10-13 digit angka)
+  // validasi format nomor hp (diawali 08, 10-13 digit angka), sama dengan constraint database
   static String? validatePhone(String value) {
     final phone = value.trim();
     if (phone.isEmpty) {
@@ -86,58 +74,28 @@ class CustomerModel {
     return null;
   }
 
-  // cek apakah nomor hp sudah dipakai akun lain
-  static bool isPhoneRegistered(String phone, {CustomerModel? except}) {
-    return dummyCustomers.any((c) => c.phone == phone.trim() && c != except);
-  }
-
   // getter cek role admin
   bool get isAdmin => role == 'Admin';
 
-  // konversi dari map json ke object model
+  // konversi dari baris profiles / customer_summary_view / hasil RPC
   factory CustomerModel.fromJson(Map<String, dynamic> json) {
+    final role = (json['role'] as String? ?? 'customer').toLowerCase();
     return CustomerModel(
       id: json['id'] as String,
-      name: json['name'] as String,
+      name: (json['full_name'] ?? json['name']) as String,
       phone: json['phone'] as String,
-      password: json['password'] as String? ?? 'ayamgoreng',
-      role: json['role'] as String? ?? 'Customer',
+      role: role == 'admin' ? 'Admin' : 'Customer',
+      orderCount: (json['order_count'] as num?)?.toInt() ?? 0,
     );
   }
 
-  // konversi dari object model ke map json
+  // konversi dari object model ke map json sesuai kolom tabel profiles
   Map<String, dynamic> toJson() {
     return {
       'id': id,
-      'name': name,
+      'full_name': name,
       'phone': phone,
-      'password': password,
-      'role': role,
+      'role': isAdmin ? 'admin' : 'customer',
     };
   }
-
-  // DAFTAR AKUN YANG TERDAFTAR (BISA LOGIN DENGAN NO HP & PASSWORD 'ayamgoreng')
-  static List<CustomerModel> dummyCustomers = [
-    CustomerModel(
-      id: 'ADM-01',
-      name: 'Admin YALT',
-      phone: '081111111111',
-      password: 'ayamgoreng',
-      role: 'Admin',
-    ),
-    CustomerModel(
-      id: 'CUST-01',
-      name: 'Prabowo',
-      phone: '081234567890',
-      password: 'ayamgoreng',
-      role: 'Customer',
-    ),
-    CustomerModel(
-      id: 'CUST-02',
-      name: 'Jokowi',
-      phone: '089876543210',
-      password: 'ayamgoreng',
-      role: 'Customer',
-    ),
-  ];
 }
