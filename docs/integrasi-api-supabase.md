@@ -311,7 +311,7 @@ Hasil: **HTTP 200**, 4 layanan. Di app versi web, request yang sama juga terliha
 ## 9. Keterbatasan saat ini
 
 Sudah diselesaikan pada 7 Nov 2026:
-- ~~Pelanggan yang ditambahkan admin belum bisa login~~. Sekarang dibuat lewat RPC `admin_create_customer` (akun login + profil, password awal `ayamgoreng`).
+- ~~Pelanggan yang ditambahkan admin belum bisa login~~. Sekarang dibuat lewat RPC `admin_create_customer` (akun login + profil). Sejak 18 Nov 2026 password awal wajib diisi admin, tidak ada password bawaan.
 - ~~Pesanan, timeline, dan QR masih dummy~~. Sekarang memakai RPC `sp_create_order`, `sp_update_order_status`, `sp_get_pickup_token`, `sp_pickup_order`, ditambah Realtime.
 - ~~Kasir POS & beranda pelanggan membaca list layanan bersama~~. Sekarang setiap halaman mengambil data layanan sendiri dari API.
 

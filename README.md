@@ -89,19 +89,41 @@ Cakupan Bruno: login (sukses/gagal), CRUD layanan + RLS, pembuatan pesanan atomi
 
 ## 4. Build Android & kesiapan Play Store
 
+Package aplikasi: `com.yalt.laundry`.
+
+### Membuat upload keystore (sekali saja)
+
+```bash
+keytool -genkey -v -keystore android/upload-keystore.jks -keyalg RSA -keysize 2048 -validity 10000 -alias upload
+```
+
+Salin `android/key.properties.example` menjadi `android/key.properties`, lalu isi password keystore. Kedua file sudah di-*ignore* git. **Simpan cadangan keystore dan passwordnya di tempat aman**. Tanpa `key.properties`, build release memakai debug key dan ditolak Play Console (Gradle menampilkan peringatan).
+
+### Build bundle
+
 ```bash
 flutter build appbundle --release --dart-define-from-file=.env
 ```
 
-Daftar periksa sebelum unggah ke Play Console:
+Hasil: `build/app/outputs/bundle/release/app-release.aab`. Wajib memakai `--dart-define-from-file=.env`; tanpa itu aplikasi hanya menampilkan layar petunjuk konfigurasi.
 
-- [ ] Ganti `applicationId` di `android/app/build.gradle.kts` (sekarang `com.example.my_app`; ID berawalan `com.example` ditolak Play Store) dan sesuaikan package `MainActivity`.
-- [ ] Buat *upload keystore* (`keytool -genkey -v -keystore upload-keystore.jks -keyalg RSA -keysize 2048 -validity 10000 -alias upload`), simpan `android/key.properties` (jangan di-commit), lalu atur `signingConfigs.release`. Saat ini build release masih ditandatangani dengan debug key.
-- [ ] Naikkan `version:` di `pubspec.yaml` setiap rilis.
+### Daftar periksa
+
+- [x] `applicationId` = `com.yalt.laundry` (bukan `com.example`).
+- [x] Signing release dari `android/key.properties`.
+- [x] Tidak ada password bawaan untuk pelanggan baru: admin wajib mengisi password awal (migrasi `20261118000000_require_customer_initial_password.sql`).
 - [x] Izin `INTERNET` ada di manifest utama. Izin `CAMERA` ditambahkan otomatis oleh `mobile_scanner` dengan `android.hardware.camera` `required=false`.
-- [x] Orientasi dikunci portrait dan nama aplikasi "Yalt" sudah diatur.
-- [ ] Periksa ikon launcher (`android/app/src/main/res/mipmap-*`) agar memakai logo YALT, bukan ikon bawaan Flutter.
-- [ ] Siapkan kebijakan privasi (aplikasi menyimpan nama & nomor HP, dan memakai kamera untuk scan QR), formulir *Data safety*, screenshot, serta ikon 512 px.
+- [x] Orientasi portrait, nama aplikasi "Yalt", ikon launcher memakai logo YALT.
+- [x] Draf kebijakan privasi: [docs/play-store/kebijakan-privasi.md](docs/play-store/kebijakan-privasi.md). Draf listing, Data safety, rating konten, dan App access: [docs/play-store/listing-dan-data-safety.md](docs/play-store/listing-dan-data-safety.md).
+- [ ] Buat upload keystore dan `android/key.properties` (perintah di atas).
+- [ ] Terapkan migrasi baru ke Supabase: salin isi `supabase/migrations/20261118000000_require_customer_initial_password.sql` ke **SQL Editor** lalu *Run*.
+- [ ] Ganti password akun admin di Supabase (*Authentication → Users*). Password demo `ayamgoreng` tertulis di repo dan hanya untuk demo lokal/kuliah.
+- [ ] Matikan pendaftaran publik (*Authentication → Sign In / Providers → Allow new users to sign up*).
+- [ ] Publikasikan kebijakan privasi ke URL publik dan isi kontak di dalamnya.
+- [ ] Siapkan ikon 512 px, *feature graphic* 1024×500, dan minimal 2 screenshot.
+- [ ] Buat akun khusus reviewer untuk bagian *App access*.
+- [ ] Naikkan `version:` di `pubspec.yaml` setiap rilis.
+- [ ] Akun developer pribadi baru: *closed testing* 12 tester selama 14 hari sebelum Production.
 
 ## 5. Alur demo
 
@@ -114,7 +136,7 @@ Daftar periksa sebelum unggah ke Play Console:
 ## Keamanan sebelum rilis
 
 - Supabase Security Advisor: 0 error. Sisa warning dijelaskan di [docs/database.md](docs/database.md#9-hardening-supabase-security-advisor).
-- **Ganti password akun admin demo** (`081111111111` / `ayamgoreng` tertulis di repo) dan password awal pelanggan (`CustomerRepository.defaultPassword` dan default `p_password` di `admin_create_customer`) sebelum aplikasi dipakai publik.
+- **Ganti password akun admin demo** (`081111111111` / `ayamgoreng` tertulis di repo) sebelum aplikasi dipakai publik. Pelanggan baru tidak lagi memakai password bawaan; admin mengisi password awal di form registrasi.
 - **Matikan pendaftaran publik** (*Authentication → Sign In / Providers → Allow new users to sign up*), karena akun pelanggan dibuat oleh admin.
 - Aktifkan *Leaked password protection* (*Authentication → Attack Protection*) bila paket proyek mendukung.
 

@@ -1,0 +1,6 @@
+# Salin menjadi android/key.properties (JANGAN di-commit) lalu isi sesuai keystore Anda.
+# storeFile relatif terhadap folder android/app, atau pakai path absolut.
+storePassword=isi_password_keystore
+keyPassword=isi_password_key
+keyAlias=upload
+storeFile=../upload-keystore.jks

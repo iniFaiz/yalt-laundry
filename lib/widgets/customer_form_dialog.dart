@@ -29,6 +29,8 @@ class _CustomerFormDialogState extends State<CustomerFormDialog> {
 
   late final TextEditingController _nameController;
   late final TextEditingController _phoneController;
+  final _passwordController = TextEditingController(); // password awal, hanya mode tambah
+  bool _obscurePassword = true;
 
   bool _isSaving = false;
   String? _phoneError; // pesan dari server jika nomor hp sudah dipakai
@@ -50,6 +52,7 @@ class _CustomerFormDialogState extends State<CustomerFormDialog> {
     // controller dibersihkan agar tidak memory leak
     _nameController.dispose();
     _phoneController.dispose();
+    _passwordController.dispose();
     super.dispose();
   }
 
@@ -71,7 +74,7 @@ class _CustomerFormDialogState extends State<CustomerFormDialog> {
     try {
       final saved = _isEdit
           ? await repository.updateCustomer(widget.customer!.id, name, phone)
-          : await repository.createCustomer(name, phone);
+          : await repository.createCustomer(name, phone, _passwordController.text);
       if (!mounted) return;
       Navigator.pop(context, saved);
     } catch (e) {
@@ -119,12 +122,31 @@ class _CustomerFormDialogState extends State<CustomerFormDialog> {
                 prefixIcon: const Icon(Icons.phone),
                 hintText: '08...',
                 helperMaxLines: 2,
-                helperText: _isEdit
-                    ? 'Nomor HP juga dipakai pelanggan untuk login'
-                    : 'Password awal: ${CustomerRepository.defaultPassword}',
+                helperText: 'Nomor HP juga dipakai pelanggan untuk login',
               ),
               validator: (value) => CustomerModel.validatePhone(value ?? '') ?? _phoneError,
             ),
+            // password awal diisi admin lalu diberikan ke pelanggan; pelanggan bisa menggantinya di tab Profil
+            if (!_isEdit) ...[
+              const SizedBox(height: 12),
+              TextFormField(
+                controller: _passwordController,
+                enabled: !_isSaving,
+                obscureText: _obscurePassword,
+                decoration: InputDecoration(
+                  labelText: 'Password Awal',
+                  prefixIcon: const Icon(Icons.lock),
+                  helperMaxLines: 2,
+                  helperText: 'Berikan ke pelanggan, bisa diganti di menu Profil',
+                  suffixIcon: IconButton(
+                    tooltip: _obscurePassword ? 'Tampilkan password' : 'Sembunyikan password',
+                    icon: Icon(_obscurePassword ? Icons.visibility : Icons.visibility_off),
+                    onPressed: () => setState(() => _obscurePassword = !_obscurePassword),
+                  ),
+                ),
+                validator: (value) => CustomerModel.validatePassword(value ?? ''),
+              ),
+            ],
             if (_errorMessage != null) ...[
               const SizedBox(height: 12),
               Text(_errorMessage!, style: const TextStyle(color: Colors.red)),

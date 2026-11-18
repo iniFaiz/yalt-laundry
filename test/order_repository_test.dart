@@ -149,10 +149,10 @@ void main() {
   test('Kelola pelanggan: buat akun, nomor ganda ditolak, lalu hapus', () async {
     final repo = CustomerRepository(admin);
     final phone = '0899${DateTime.now().millisecondsSinceEpoch.toString().substring(5)}';
-    final created = await repo.createCustomer('Pelanggan Integrasi', phone);
+    final created = await repo.createCustomer('Pelanggan Integrasi', phone, 'rahasia123');
     try {
       expect(created.isAdmin, isFalse);
-      await expectLater(repo.createCustomer('Ganda', phone), postgrestError('23505', 'phone_taken'));
+      await expectLater(repo.createCustomer('Ganda', phone, 'rahasia123'), postgrestError('23505', 'phone_taken'));
 
       // akun baru langsung bisa login dengan password awal
       final client = await loginAs(phone);
@@ -160,7 +160,7 @@ void main() {
       await client.auth.signOut();
 
       // pelanggan biasa tidak boleh memakai RPC admin
-      await expectLater(CustomerRepository(prabowo).createCustomer('Penyusup', '089911112222'), postgrestError('42501'));
+      await expectLater(CustomerRepository(prabowo).createCustomer('Penyusup', '089911112222', 'rahasia123'), postgrestError('42501'));
     } finally {
       await repo.deleteCustomer(created.id);
     }

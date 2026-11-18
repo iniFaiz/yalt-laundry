@@ -119,7 +119,7 @@ Setiap error membawa `hint` yang bisa dibaca mesin, misalnya `invalid_transition
 | `sp_get_pickup_token(order_id)` | `POST /rest/v1/rpc/sp_get_pickup_token` | Hanya pemilik pesanan. Token bernilai `null` setelah dipakai. |
 | `sp_pickup_order(token)` | `POST /rest/v1/rpc/sp_pickup_order` | Admin saja. `SELECT … FOR UPDATE` berdasarkan token, cek belum dipakai & `siap_diambil`, lalu set `diambil` + `pickup_token_used_at` dalam satu transaksi. |
 | `sp_delete_service(service_id)` | `POST /rest/v1/rpc/sp_delete_service` | Admin saja. Jika sudah dipakai pesanan → `is_active = false` (`deactivated`), jika belum → dihapus (`deleted`). |
-| `admin_create_customer(name, phone, password)` | `POST /rest/v1/rpc/admin_create_customer` | Admin saja. Membuat akun di `auth.users` + `auth.identities`; profil dibuat trigger. Password awal `ayamgoreng`. |
+| `admin_create_customer(name, phone, password)` | `POST /rest/v1/rpc/admin_create_customer` | Admin saja. Membuat akun di `auth.users` + `auth.identities`; profil dibuat trigger. Password awal **wajib** diisi admin (min. 6 karakter tanpa spasi, tanpa nilai default sejak migrasi `20261118000000`). |
 | `admin_update_customer(id, name, phone)` | `POST /rest/v1/rpc/admin_update_customer` | Admin saja. Mengubah profil & email login (`<hp>@yalt.test`). |
 | `admin_delete_customer(id)` | `POST /rest/v1/rpc/admin_delete_customer` | Admin saja. Ditolak jika pelanggan punya pesanan (`customer_has_orders`). |
 

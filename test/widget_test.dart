@@ -138,9 +138,12 @@ void main() {
     await tester.tap(find.text('Simpan'));
     await tester.pumpAndSettle();
     expect(find.text('Nomor HP harus diawali 08 dan berisi 10-13 angka'), findsOneWidget);
+    // password awal wajib diisi admin (tidak ada password bawaan)
+    expect(find.text('Password tidak boleh kosong'), findsOneWidget);
 
-    // nomor hp benar, pelanggan tersimpan dan tampil di daftar
+    // nomor hp benar dan password awal terisi, pelanggan tersimpan dan tampil di daftar
     await tester.enterText(find.byType(TextFormField).at(1), '085700000001');
+    await tester.enterText(find.byType(TextFormField).at(2), 'rahasia123');
     await tester.tap(find.text('Simpan'));
     await tester.pumpAndSettle();
     expect(find.text('Gibran'), findsOneWidget);
@@ -164,6 +167,7 @@ void main() {
     await tester.tap(find.byTooltip('Registrasi Pelanggan Baru'));
     await tester.pumpAndSettle();
     await tester.enterText(find.byType(TextFormField).at(0), 'Kaesang');
+    await tester.enterText(find.byType(TextFormField).at(2), 'rahasia123');
 
     // nomor hp yang sudah dipakai pelanggan lain ditolak server
     await tester.enterText(find.byType(TextFormField).at(1), '081234567890');

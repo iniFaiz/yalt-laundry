@@ -8,9 +8,6 @@ class CustomerRepository {
   // instance yang dipakai aplikasi, bisa diganti versi palsu saat tes
   static CustomerRepository instance = CustomerRepository();
 
-  // password awal pelanggan yang didaftarkan admin
-  static const String defaultPassword = 'ayamgoreng';
-
   final SupabaseClient? _injectedClient;
 
   CustomerRepository([this._injectedClient]);
@@ -27,7 +24,8 @@ class CustomerRepository {
   }
 
   // POST /rest/v1/rpc/admin_create_customer — membuat akun login + profil
-  Future<CustomerModel> createCustomer(String name, String phone, {String password = defaultPassword}) async {
+  // password awal wajib diisi admin, tidak ada password bawaan
+  Future<CustomerModel> createCustomer(String name, String phone, String password) async {
     final row = await _client.rpc('admin_create_customer', params: {
       'p_full_name': name,
       'p_phone': phone,

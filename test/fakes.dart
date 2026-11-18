@@ -155,7 +155,7 @@ class FakeCustomerRepository extends CustomerRepository {
       ];
 
   @override
-  Future<CustomerModel> createCustomer(String name, String phone, {String password = 'ayamgoreng'}) async {
+  Future<CustomerModel> createCustomer(String name, String phone, String password) async {
     if (db.users.any((u) => u.phone == phone)) {
       throw _error('23505', 'Nomor HP sudah terdaftar', 'phone_taken');
     }
