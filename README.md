@@ -77,10 +77,11 @@ Jangan pernah mengisi *secret/service_role key* di `.env`. Aplikasi hanya memaka
 ```bash
 flutter analyze
 flutter test test/model_test.dart test/widget_test.dart                       # tanpa internet (backend palsu)
-flutter test test/order_repository_test.dart test/service_repository_test.dart --dart-define-from-file=.env
+flutter test test/order_repository_test.dart test/service_repository_test.dart --dart-define-from-file=.env --dart-define-from-file=.env.test
 node bruno/run-tests.mjs                                                         # koleksi Bruno ke Supabase
 ```
 
+- Tes integrasi dan Bruno butuh `.env.test` (salin dari `.env.test.example`) berisi `ADMIN_PASSWORD`. File ini terpisah dari `.env` agar password tidak ikut di-build ke aplikasi, dan tidak di-commit.
 - Tes integrasi dan Bruno **membuat pesanan sungguhan** di database sebagai bukti alur demo (pesanan tidak dihapus).
 - `bruno/run-tests.mjs` membaca `.env`, menjalankan `@usebruno/cli`, lalu menyimpan laporan (token login disensor) ke `docs/evidence/bruno-report.html|json`.
 - Untuk membuka koleksi di aplikasi Bruno: *Open Collection → folder `bruno/`*, pilih environment **Supabase**, lalu isi secret `base_url` dan `publishable_key`.
@@ -116,9 +117,10 @@ Hasil: `build/app/outputs/bundle/release/app-release.aab`. Wajib memakai `--dart
 - [x] Orientasi portrait, nama aplikasi "Yalt", ikon launcher memakai logo YALT.
 - [x] Draf kebijakan privasi: [docs/play-store/kebijakan-privasi.md](docs/play-store/kebijakan-privasi.md). Draf listing, Data safety, rating konten, dan App access: [docs/play-store/listing-dan-data-safety.md](docs/play-store/listing-dan-data-safety.md).
 - [ ] Buat upload keystore dan `android/key.properties` (perintah di atas).
-- [ ] Terapkan migrasi baru ke Supabase: salin isi `supabase/migrations/20261118000000_require_customer_initial_password.sql` ke **SQL Editor** lalu *Run*.
-- [ ] Ganti password akun admin di Supabase (*Authentication → Users*). Password demo `ayamgoreng` tertulis di repo dan hanya untuk demo lokal/kuliah.
-- [ ] Matikan pendaftaran publik (*Authentication → Sign In / Providers → Allow new users to sign up*).
+- [x] Terapkan migrasi `20261118000000_require_customer_initial_password.sql` (sudah diterapkan, terverifikasi: RPC tanpa `p_password` → 404).
+- [x] Terapkan migrasi `20261118010000_block_public_signup.sql` (terverifikasi lewat Bruno `08 Tanpa Login/03`).
+- [ ] Ganti password akun admin lewat SQL Editor: `update auth.users set encrypted_password = extensions.crypt('PASSWORD_BARU', extensions.gen_salt('bf')) where email = '081111111111@yalt.test';`, lalu isi `ADMIN_PASSWORD` di `.env.test`.
+- [x] Matikan pendaftaran publik (*Allow new users to sign up* = off; `/auth/v1/signup` → 422 `signup_disabled`).
 - [ ] Publikasikan kebijakan privasi ke URL publik dan isi kontak di dalamnya.
 - [ ] Siapkan ikon 512 px, *feature graphic* 1024×500, dan minimal 2 screenshot.
 - [ ] Buat akun khusus reviewer untuk bagian *App access*.

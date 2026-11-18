@@ -4,10 +4,14 @@ import 'package:my_app/repositories/auth_repository.dart';
 import 'package:my_app/repositories/service_repository.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
+import 'test_credentials.dart';
+
 // tes integrasi: memanggil API Supabase sungguhan (butuh migration & seed sudah dijalankan)
 // jalankan dengan: flutter test test/service_repository_test.dart --dart-define-from-file=.env
 void main() {
-  final skip = Env.isMissing ? 'Jalankan dengan --dart-define-from-file=.env' : false;
+  final skip = Env.isMissing || adminPassword.isEmpty
+      ? 'Jalankan dengan --dart-define-from-file=.env --dart-define-from-file=.env.test'
+      : false;
 
   // client baru per tes agar sesi login tidak saling tercampur
   SupabaseClient newClient() => SupabaseClient(
@@ -18,7 +22,7 @@ void main() {
 
   Future<SupabaseClient> loginAs(String phone) async {
     final client = newClient();
-    await client.auth.signInWithPassword(email: AuthRepository.emailFromPhone(phone), password: 'ayamgoreng');
+    await client.auth.signInWithPassword(email: AuthRepository.emailFromPhone(phone), password: passwordFor(phone));
     return client;
   }
 

@@ -1,0 +1,39 @@
+meta {
+  name: Daftar Mandiri lewat Auth (ditolak)
+  type: http
+  seq: 3
+}
+
+post {
+  url: {{base_url}}/auth/v1/signup
+  body: json
+  auth: none
+}
+
+headers {
+  apikey: {{publishable_key}}
+}
+
+body:json {
+  {
+    "email": "{{signup_phone}}@yalt.test",
+    "password": "rahasia123",
+    "data": { "full_name": "Penyusup", "phone": "{{signup_phone}}" }
+  }
+}
+
+script:pre-request {
+  bru.setVar("signup_phone", "0898" + String(Date.now()).slice(-8));
+}
+
+tests {
+  // ditolak oleh trigger handle_new_user (500 "Database error saving new user")
+  // atau oleh pengaturan "Allow new users to sign up" = off (422 signup_disabled)
+  test("pendaftaran publik ditolak (bukan 2xx)", function() {
+    expect(res.getStatus()).to.be.at.least(400);
+  });
+  test("tidak ada akun yang dibuat", function() {
+    const body = res.getBody() || {};
+    expect(body.id || (body.user && body.user.id)).to.equal(undefined);
+  });
+}

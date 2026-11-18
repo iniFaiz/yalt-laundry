@@ -7,24 +7,27 @@ import 'package:my_app/repositories/order_repository.dart';
 import 'package:my_app/repositories/service_repository.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
+import 'test_credentials.dart';
+
 // tes integrasi: memanggil API Supabase sungguhan (butuh migration & seed sudah dijalankan)
-// jalankan dengan: flutter test test/order_repository_test.dart --dart-define-from-file=.env
+// jalankan dengan: flutter test test/order_repository_test.dart --dart-define-from-file=.env --dart-define-from-file=.env.test
 // Catatan: tes ini membuat pesanan sungguhan (tidak dihapus) sebagai bukti alur demo.
 void main() {
-  final skip = Env.isMissing ? 'Jalankan dengan --dart-define-from-file=.env' : false;
+  final skip = Env.isMissing || adminPassword.isEmpty
+      ? 'Jalankan dengan --dart-define-from-file=.env --dart-define-from-file=.env.test'
+      : false;
 
-  const adminPhone = '081111111111';
   const prabowoPhone = '081234567890';
   const jokowiPhone = '089876543210';
 
   // client baru per pengguna agar sesi login tidak saling tercampur
-  Future<SupabaseClient> loginAs(String phone) async {
+  Future<SupabaseClient> loginAs(String phone, [String? password]) async {
     final client = SupabaseClient(
       Env.supabaseUrl,
       Env.supabasePublishableKey,
       authOptions: const AuthClientOptions(autoRefreshToken: false),
     );
-    await client.auth.signInWithPassword(email: AuthRepository.emailFromPhone(phone), password: 'ayamgoreng');
+    await client.auth.signInWithPassword(email: AuthRepository.emailFromPhone(phone), password: password ?? passwordFor(phone));
     return client;
   }
 
@@ -155,7 +158,7 @@ void main() {
       await expectLater(repo.createCustomer('Ganda', phone, 'rahasia123'), postgrestError('23505', 'phone_taken'));
 
       // akun baru langsung bisa login dengan password awal
-      final client = await loginAs(phone);
+      final client = await loginAs(phone, 'rahasia123');
       expect(client.auth.currentUser!.id, created.id);
       await client.auth.signOut();
 
