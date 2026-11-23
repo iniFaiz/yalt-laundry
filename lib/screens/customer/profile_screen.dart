@@ -61,16 +61,20 @@ class _ProfileScreenState extends State<ProfileScreen> {
       debugPrint('Ganti password gagal: $e');
       if (!mounted) return;
       setState(() => _isSaving = false);
-      if (e is AuthFailure) {
+      if (e is AuthFailure && e.code != 'update_failed') {
         // tampilkan pesan di bawah kolom password lama
         _oldPasswordError = e.message;
         _formKey.currentState!.validate();
       } else {
         ScaffoldMessenger.of(context).hideCurrentSnackBar();
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
+          SnackBar(
             backgroundColor: Colors.red,
-            content: Text('Gagal mengubah password. Periksa koneksi internet lalu coba lagi.'),
+            content: Text(
+              e is AuthFailure
+                  ? e.message
+                  : 'Gagal mengubah password. Periksa koneksi internet lalu coba lagi.',
+            ),
           ),
         );
       }
@@ -116,7 +120,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
                 radius: 36,
                 backgroundColor: const Color(0xFF007BFF).withValues(alpha: 0.12),
                 child: Text(
-                  customer.name[0].toUpperCase(),
+                  customer.name.isNotEmpty ? customer.name[0].toUpperCase() : '?',
                   style: const TextStyle(fontSize: 28, fontWeight: FontWeight.bold, color: Color(0xFF007BFF)),
                 ),
               ),

@@ -109,11 +109,13 @@ void main() {
       expect(service.formattedDuration, '2 hari');
     });
 
-    test('fromJson membaca kolom duration_hours', () {
+    test('fromJson membaca kolom duration_hours dan harga berbentuk string', () {
       final service = ServiceModel.fromJson(
-        {'id': 'x', 'name': 'Cuci Kilat', 'price_per_kg': 12000, 'is_active': true, 'duration_hours': 6},
+        {'id': 'x', 'name': 'Cuci Kilat', 'price_per_kg': '12000.00', 'is_active': true, 'duration_hours': 6},
       );
+      expect(service.pricePerKG, 12000);
       expect(service.formattedDuration, '6 jam');
+      expect(() => service.name = 'a' * 101, throwsArgumentError);
     });
   });
 
@@ -134,10 +136,12 @@ void main() {
       expect(customer.phone, '081200000000');
     });
 
-    test('validasi password minimal 6 karakter tanpa spasi', () {
+    test('validasi password minimal 6 karakter tanpa spasi atau whitespace', () {
       expect(CustomerModel.validatePassword('rahasia123'), isNull);
       expect(CustomerModel.validatePassword('12345'), isNotNull);
       expect(CustomerModel.validatePassword('ada spasi'), isNotNull);
+      expect(CustomerModel.validatePassword('ada\ttab'), isNotNull);
+      expect(CustomerModel.validateName('a' * 101), isNotNull);
     });
 
     test('fromJson membaca baris profiles / customer_summary_view', () {
@@ -149,11 +153,13 @@ void main() {
     });
   });
 
-  test('formatRupiah memakai pemisah ribuan', () {
+  test('formatRupiah memakai pemisah ribuan dan aman untuk angka negatif', () {
     expect(formatRupiah(0), 'Rp 0');
     expect(formatRupiah(500), 'Rp 500');
     expect(formatRupiah(24000), 'Rp 24.000');
     expect(formatRupiah(1250000), 'Rp 1.250.000');
+    expect(formatRupiah(-100), '-Rp 100');
+    expect(formatRupiah(-12500), '-Rp 12.500');
   });
 
   test('formatKg memakai koma desimal', () {

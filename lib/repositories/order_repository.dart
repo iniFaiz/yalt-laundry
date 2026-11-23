@@ -1,7 +1,22 @@
+import 'dart:async';
+
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 import '../models/order_model.dart';
 import 'api_error.dart';
+
+/// Ringkasan laporan outlet dari daily_order_report_view (tidak terpotong limit 200).
+class OrderSummary {
+  final int activeCount;
+  final int completedCount;
+  final double collectedRevenue;
+
+  const OrderSummary({
+    required this.activeCount,
+    required this.completedCount,
+    required this.collectedRevenue,
+  });
+}
 
 // akses data pesanan ke Supabase, terpisah dari UI.
 // Baca data lewat PostgREST (dibatasi RLS), ubah data lewat RPC (fungsi database atomik).
@@ -47,6 +62,37 @@ class OrderRepository {
     return rows.map(OrderModel.fromJson).toList();
   }
 
+  // GET /rest/v1/daily_order_report_view — agregat akurat seluruh pesanan (tidak dibatasi limit)
+  Future<OrderSummary> fetchOrderSummary() async {
+    final rows = await _client
+        .from('daily_order_report_view')
+        .select('order_count, completed_count, collected_amount');
+    int totalOrders = 0;
+    int completed = 0;
+    double revenue = 0;
+    for (final row in rows) {
+      totalOrders += (row['order_count'] as num?)?.toInt() ?? 0;
+      completed += (row['completed_count'] as num?)?.toInt() ?? 0;
+      final rawRev = row['collected_amount'];
+      revenue += rawRev is num ? rawRev.toDouble() : double.tryParse(rawRev?.toString() ?? '') ?? 0.0;
+    }
+    return OrderSummary(
+      activeCount: (totalOrders - completed).clamp(0, totalOrders),
+      completedCount: completed,
+      collectedRevenue: revenue,
+    );
+  }
+
+  // GET /rest/v1/customer_summary_view — jumlah total pesanan pelanggan yang akurat
+  Future<int> fetchCustomerOrderCount(String customerId) async {
+    final row = await _client
+        .from('customer_summary_view')
+        .select('order_count')
+        .eq('id', customerId)
+        .maybeSingle();
+    return (row?['order_count'] as num?)?.toInt() ?? 0;
+  }
+
   // GET /rest/v1/orders?id=eq.<id>&select=...
   Future<OrderModel> fetchOrder(String id) async {
     final row = await _client.from('orders').select(_select).eq('id', id).single();
@@ -73,7 +119,7 @@ class OrderRepository {
     return fetchOrder(orderId);
   }
 
-  // POST /rest/v1/rpc/sp_get_pickup_token — hanya pemilik pesanan, null jika sudah dipakai
+  // POST /rest/v1/rpc/sp_get_pickup_token — hanya pemilik pesanan, null jika belum siap / sudah dipakai
   Future<String?> fetchPickupToken(String orderId) async {
     final result = await _client.rpc('sp_get_pickup_token', params: {'p_order_id': orderId}) as Map<String, dynamic>;
     return result['pickup_token'] as String?;
@@ -86,22 +132,37 @@ class OrderRepository {
     return fetchOrder(result['id'] as String);
   }
 
-  // Supabase Realtime: panggil onChange setiap ada pesanan yang berubah.
+  // Supabase Realtime: panggil onChange setiap ada pesanan yang berubah (dengan debounce 300ms
+  // agar INSERT + UPDATE dalam satu transaksi sp_create_order hanya memicu satu muat ulang).
   // Mengembalikan fungsi untuk berhenti berlangganan (dipanggil di dispose).
-  void Function() watchOrders(void Function() onChange, {String? customerId}) {
+  void Function() watchOrders(void Function() onChange, {String? customerId, String? orderId}) {
+    Timer? debounce;
+    PostgresChangeFilter? filter;
+    if (orderId != null) {
+      filter = PostgresChangeFilter(type: PostgresChangeFilterType.eq, column: 'id', value: orderId);
+    } else if (customerId != null) {
+      filter = PostgresChangeFilter(type: PostgresChangeFilterType.eq, column: 'customer_id', value: customerId);
+    }
+
+    final scope = orderId ?? customerId ?? 'all';
     final channel = _client
-        .channel('orders-${customerId ?? 'all'}-${DateTime.now().microsecondsSinceEpoch}')
+        .channel('orders-$scope-${DateTime.now().microsecondsSinceEpoch}')
         .onPostgresChanges(
           event: PostgresChangeEvent.all,
           schema: 'public',
           table: 'orders',
-          filter: customerId == null
-              ? null
-              : PostgresChangeFilter(type: PostgresChangeFilterType.eq, column: 'customer_id', value: customerId),
-          callback: (_) => onChange(),
+          filter: filter,
+          callback: (_) {
+            debounce?.cancel();
+            debounce = Timer(const Duration(milliseconds: 300), onChange);
+          },
         )
         .subscribe();
-    return () => _client.removeChannel(channel);
+
+    return () {
+      debounce?.cancel();
+      _client.removeChannel(channel);
+    };
   }
 
   static String errorMessage(Object error) =>

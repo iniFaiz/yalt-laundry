@@ -65,10 +65,15 @@ export function redact(text, secrets = []) {
   });
 }
 
+const supabaseHost = new URL(env.SUPABASE_URL).host;
+const projectRef = supabaseHost.split('.')[0];
+const secretsToRedact = [env.SUPABASE_PUBLISHABLE_KEY, env.ADMIN_PASSWORD, supabaseHost];
+if (projectRef && projectRef.length >= 8) secretsToRedact.push(projectRef);
+
 for (const file of ['bruno-report.json', 'bruno-report.html']) {
   const target = path.join(evidence, file);
   if (fs.existsSync(target)) {
-    fs.writeFileSync(target, redact(fs.readFileSync(target, 'utf8'), [env.SUPABASE_PUBLISHABLE_KEY, env.ADMIN_PASSWORD]));
+    fs.writeFileSync(target, redact(fs.readFileSync(target, 'utf8'), secretsToRedact));
   }
 }
 process.exit(result.status ?? 1);

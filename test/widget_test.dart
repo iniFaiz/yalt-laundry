@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:my_app/main.dart';
+import 'package:my_app/repositories/auth_repository.dart';
 import 'package:qr_flutter/qr_flutter.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
@@ -185,7 +186,9 @@ void main() {
     await tester.pumpAndSettle();
 
     // pilih layanan dan isi berat
-    await tester.tap(find.text('Pilih Layanan'));
+    final serviceDropdown = find.byType(DropdownButtonFormField<String>).at(1);
+    await tester.ensureVisible(serviceDropdown);
+    await tester.tap(serviceDropdown);
     await tester.pumpAndSettle();
     await tester.tap(find.text('Cuci Kering (Rp 6.000 / kg)').last);
     await tester.pumpAndSettle();
@@ -283,6 +286,73 @@ void main() {
 
     await _login(tester, '089876543210', 'rahasia123');
     expect(find.text('Halo, Jokowi 👋'), findsOneWidget);
+  });
+
+  testWidgets('Sesi tersimpan dipulihkan otomatis tanpa perlu login ulang', (WidgetTester tester) async {
+    AuthRepository.instance = FakeAuthRepository(backend, savedUser: backend.users[1]);
+    await tester.pumpWidget(const MyApp());
+    await tester.pumpAndSettle();
+
+    expect(find.text('Halo, Prabowo 👋'), findsOneWidget);
+    expect(find.text('Login'), findsNothing);
+  });
+
+  testWidgets('Form layanan menampilkan validasi dan menyimpan layanan baru urut abjad', (WidgetTester tester) async {
+    await tester.pumpWidget(const MyApp());
+    await tester.pumpAndSettle();
+
+    await _login(tester, '081111111111', 'ayamgoreng');
+    await tester.tap(find.text('Layanan'));
+    await tester.pumpAndSettle();
+
+    // tekan simpan dalam kondisi kosong -> muncul pesan validasi
+    await tester.tap(find.text('Tambah Layanan'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Simpan'));
+    await tester.pumpAndSettle();
+    expect(find.text('Nama layanan tidak boleh kosong'), findsOneWidget);
+    expect(find.text('Tarif per kg harus lebih dari 0'), findsOneWidget);
+
+    // isi valid (termasuk format ribuan bertitik) -> tersimpan
+    await tester.enterText(find.byType(TextFormField).at(0), 'Bedcover');
+    await tester.enterText(find.byType(TextFormField).at(1), '15.000');
+    await tester.enterText(find.byType(TextFormField).at(2), '72');
+    await tester.tap(find.text('Simpan'));
+    await tester.pumpAndSettle();
+    expect(find.text('Bedcover'), findsOneWidget);
+    expect(find.text('Rp 15.000 / kg • ±3 hari'), findsOneWidget);
+  });
+
+  testWidgets('Pencarian Monitoring & Pelanggan berfungsi serta draft POS bertahan saat pindah tab',
+      (WidgetTester tester) async {
+    await tester.pumpWidget(const MyApp());
+    await tester.pumpAndSettle();
+
+    await _login(tester, '081111111111', 'ayamgoreng');
+
+    // isi berat di Kasir POS lalu pindah ke Monitoring
+    await tester.enterText(find.widgetWithText(TextField, 'Contoh: 3.5'), '4.5');
+    await tester.tap(find.text('Monitoring'));
+    await tester.pumpAndSettle();
+
+    // cari berdasarkan kode pesanan
+    await tester.enterText(find.byType(TextField).first, 'ORD-00001');
+    await tester.pumpAndSettle();
+    expect(find.text('Prabowo'), findsOneWidget);
+    expect(find.text('Jokowi'), findsNothing);
+
+    // pindah ke Pelanggan dan cari nama
+    await tester.tap(find.text('Pelanggan'));
+    await tester.pumpAndSettle();
+    await tester.enterText(find.byType(TextField).first, 'Jokowi');
+    await tester.pumpAndSettle();
+    expect(find.text('Jokowi'), findsWidgets);
+    expect(find.text('Prabowo'), findsNothing);
+
+    // kembali ke Kasir POS: isian berat tetap tersimpan
+    await tester.tap(find.text('Kasir POS'));
+    await tester.pumpAndSettle();
+    expect(find.text('4.5'), findsOneWidget);
   });
 }
 

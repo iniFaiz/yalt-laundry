@@ -9,8 +9,11 @@ Dokumen ini berisi bukti setiap fitur database: tabel, relasi, constraint, index
 | `supabase/migrations/20261107000000_create_orders.sql` | `orders`, `order_items`, `order_status_histories`, `fn_item_total`, trigger status, RLS, RPC pesanan & QR, view, Realtime |
 | `supabase/migrations/20261107010000_customer_management_and_service_delete.sql` | `customer_summary_view`, RPC kelola pelanggan, RPC hapus layanan |
 | `supabase/migrations/20261107020000_security_hardening.sql` | Perbaikan temuan Security Advisor (search_path, hak EXECUTE) |
+| `supabase/migrations/20261118000000_require_customer_initial_password.sql` | Wajibkan password awal pelanggan di `admin_create_customer` |
+| `supabase/migrations/20261118010000_block_public_signup.sql` | Blokir pendaftaran publik pada trigger `handle_new_user` |
+| `supabase/migrations/20261123000000_optimize_and_harden.sql` | Perketat `sp_get_pickup_token`, batas panjang teks, `fn_next_order_code`, optimasi RLS InitPlan, index, & daftar kolom Realtime |
 | `supabase/seed.sql` | 4 layanan (+ estimasi jam) dan 3 akun demo |
-| `supabase/tests/order_flow_test.sql` | 35 tes SQL, semua data tes otomatis di-rollback |
+| `supabase/tests/order_flow_test.sql` | 36 tes SQL, semua data tes otomatis di-rollback |
 
 ---
 
@@ -116,7 +119,7 @@ Setiap error membawa `hint` yang bisa dibaca mesin, misalnya `invalid_transition
 | `fn_item_total(weight, price)` | `POST /rest/v1/rpc/fn_item_total` | `round(weight * price, 0)`. Dipakai di generated column dan saat menghitung total pesanan. |
 | `sp_create_order(customer_id, items jsonb, notes)` | `POST /rest/v1/rpc/sp_create_order` | Admin saja. Memvalidasi pelanggan, 1–20 item, berat 0–100 kg, dan layanan aktif (dikunci `FOR SHARE`). Menyimpan snapshot tarif, menghitung total & estimasi selesai. **Atomik.** |
 | `sp_update_order_status(order_id, new_status)` | `POST /rest/v1/rpc/sp_update_order_status` | Admin saja. Mengunci baris (`FOR UPDATE`) dan hanya mengizinkan maju satu langkah. Status `diambil` ditolak (`pickup_requires_qr`). |
-| `sp_get_pickup_token(order_id)` | `POST /rest/v1/rpc/sp_get_pickup_token` | Hanya pemilik pesanan. Token bernilai `null` setelah dipakai. |
+| `sp_get_pickup_token(order_id)` | `POST /rest/v1/rpc/sp_get_pickup_token` | Hanya pemilik pesanan. Token hanya dikirim saat `siap_diambil` dan bernilai `null` sebelum siap atau setelah dipakai. |
 | `sp_pickup_order(token)` | `POST /rest/v1/rpc/sp_pickup_order` | Admin saja. `SELECT … FOR UPDATE` berdasarkan token, cek belum dipakai & `siap_diambil`, lalu set `diambil` + `pickup_token_used_at` dalam satu transaksi. |
 | `sp_delete_service(service_id)` | `POST /rest/v1/rpc/sp_delete_service` | Admin saja. Jika sudah dipakai pesanan → `is_active = false` (`deactivated`), jika belum → dihapus (`deleted`). |
 | `admin_create_customer(name, phone, password)` | `POST /rest/v1/rpc/admin_create_customer` | Admin saja. Membuat akun di `auth.users` + `auth.identities`; profil dibuat trigger. Password awal **wajib** diisi admin (min. 6 karakter tanpa spasi, tanpa nilai default sejak migrasi `20261118000000`). |
@@ -195,8 +198,11 @@ Tanpa Supabase CLI (cara yang dipakai proyek ini): buka **Supabase Dashboard →
 3. `supabase/migrations/20261107000000_create_orders.sql`
 4. `supabase/migrations/20261107010000_customer_management_and_service_delete.sql`
 5. `supabase/migrations/20261107020000_security_hardening.sql`
-6. `supabase/seed.sql` (aman dijalankan ulang)
-7. `supabase/tests/order_flow_test.sql` untuk verifikasi. Hasilnya tabel 35 baris yang semuanya `LULUS`.
+6. `supabase/migrations/20261118000000_require_customer_initial_password.sql`
+7. `supabase/migrations/20261118010000_block_public_signup.sql`
+8. `supabase/migrations/20261123000000_optimize_and_harden.sql`
+9. `supabase/seed.sql` (aman dijalankan ulang)
+10. `supabase/tests/order_flow_test.sql` untuk verifikasi. Hasilnya tabel 36 baris yang semuanya `LULUS`.
 
 SQL Editor akan menampilkan peringatan *destructive operation* (karena ada `revoke`/`delete` di dalam fungsi) dan *table without RLS* (untuk tabel *temp* hasil tes). Keduanya aman dikonfirmasi.
 

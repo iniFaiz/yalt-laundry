@@ -31,7 +31,7 @@ lib/
 supabase/
   migrations/                semua objek SQL (tabel, RLS, fungsi, trigger, view)
   seed.sql                   layanan + akun demo
-  tests/order_flow_test.sql  35 tes SQL (rollback otomatis)
+  tests/order_flow_test.sql  36 tes SQL (rollback otomatis)
 bruno/                       koleksi API (48 request, 109 tes) + run-tests.mjs
 docs/                        database.md, integrasi-api-supabase.md, diagram, evidence/
 test/                        tes unit, widget (backend palsu), integrasi (Supabase asli)
@@ -56,8 +56,11 @@ Login memakai **nomor HP + password**. Semua akun memakai password `ayamgoreng`.
    3. `supabase/migrations/20261107000000_create_orders.sql`
    4. `supabase/migrations/20261107010000_customer_management_and_service_delete.sql`
    5. `supabase/migrations/20261107020000_security_hardening.sql`
-   6. `supabase/seed.sql`
-3. Verifikasi: jalankan `supabase/tests/order_flow_test.sql`. Semua 35 baris harus `LULUS`. Data tes dibatalkan otomatis.
+   6. `supabase/migrations/20261118000000_require_customer_initial_password.sql`
+   7. `supabase/migrations/20261118010000_block_public_signup.sql`
+   8. `supabase/migrations/20261123000000_optimize_and_harden.sql`
+   9. `supabase/seed.sql`
+3. Verifikasi: jalankan `supabase/tests/order_flow_test.sql`. Semua 36 baris harus `LULUS`. Data tes dibatalkan otomatis.
 4. Di **Authentication → Sign In / Providers**, matikan *Allow new users to sign up* (akun pelanggan dibuat oleh admin).
 
 Penjelasan lengkap setiap objek database, termasuk backup/restore, ada di [docs/database.md](docs/database.md).
@@ -111,14 +114,15 @@ Hasil: `build/app/outputs/bundle/release/app-release.aab`. Wajib memakai `--dart
 ### Daftar periksa
 
 - [x] `applicationId` = `com.yalt.laundry` (bukan `com.example`).
-- [x] Signing release dari `android/key.properties`.
+- [x] Signing release dari `android/key.properties`, R8 minification & resource shrinking aktif, `android:allowBackup="false"`.
 - [x] Tidak ada password bawaan untuk pelanggan baru: admin wajib mengisi password awal (migrasi `20261118000000_require_customer_initial_password.sql`).
 - [x] Izin `INTERNET` ada di manifest utama. Izin `CAMERA` ditambahkan otomatis oleh `mobile_scanner` dengan `android.hardware.camera` `required=false`.
-- [x] Orientasi portrait, nama aplikasi "Yalt", ikon launcher memakai logo YALT.
+- [x] Orientasi portrait, nama aplikasi "Yalt", ikon launcher memakai logo YALT, sesi login otomatis diingat.
 - [x] Draf kebijakan privasi: [docs/play-store/kebijakan-privasi.md](docs/play-store/kebijakan-privasi.md). Draf listing, Data safety, rating konten, dan App access: [docs/play-store/listing-dan-data-safety.md](docs/play-store/listing-dan-data-safety.md).
 - [ ] Buat upload keystore dan `android/key.properties` (perintah di atas).
 - [x] Terapkan migrasi `20261118000000_require_customer_initial_password.sql` (sudah diterapkan, terverifikasi: RPC tanpa `p_password` → 404).
 - [x] Terapkan migrasi `20261118010000_block_public_signup.sql` (terverifikasi lewat Bruno `08 Tanpa Login/03`).
+- [ ] Terapkan migrasi `20261123000000_optimize_and_harden.sql` di Supabase SQL Editor (perketat `sp_get_pickup_token`, batas panjang teks, fix `order_code` ≥ 100.000, optimasi RLS InitPlan, index, & publication Realtime tanpa `pickup_token`).
 - [ ] Ganti password akun admin lewat SQL Editor: `update auth.users set encrypted_password = extensions.crypt('PASSWORD_BARU', extensions.gen_salt('bf')) where email = '081111111111@yalt.test';`, lalu isi `ADMIN_PASSWORD` di `.env.test`.
 - [x] Matikan pendaftaran publik (*Allow new users to sign up* = off; `/auth/v1/signup` → 422 `signup_disabled`).
 - [ ] Publikasikan kebijakan privasi ke URL publik dan isi kontak di dalamnya.
@@ -144,7 +148,6 @@ Hasil: `build/app/outputs/bundle/release/app-release.aab`. Wajib memakai `--dart
 
 ## Keterbatasan yang diketahui
 
-- Sesi login belum diingat setelah aplikasi ditutup.
 - Akun pelanggan dibuat dengan menulis langsung ke `auth.users` dari fungsi database (pola yang sama dengan seed). Cara ini praktis tanpa Edge Function, tetapi bergantung pada struktur tabel internal Supabase Auth.
 - Login nomor HP dipetakan ke email internal `<nomor>@yalt.test` (tanpa OTP SMS).
 - Prosedur backup/restore sudah didokumentasikan tetapi belum diuji pada proyek terpisah.

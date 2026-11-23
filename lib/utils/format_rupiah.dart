@@ -1,6 +1,7 @@
 // helper format angka ke rupiah dengan pemisah ribuan, contoh: 24000 -> Rp 24.000
 String formatRupiah(double value) {
-  final digits = value.toStringAsFixed(0);
+  final isNegative = value < 0;
+  final digits = value.abs().toStringAsFixed(0);
   final buffer = StringBuffer();
   for (int i = 0; i < digits.length; i++) {
     // sisipkan titik setiap 3 digit dihitung dari belakang
@@ -9,5 +10,5 @@ String formatRupiah(double value) {
     }
     buffer.write(digits[i]);
   }
-  return 'Rp $buffer';
+  return '${isNegative ? '-' : ''}Rp $buffer';
 }

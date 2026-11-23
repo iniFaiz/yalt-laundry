@@ -1,8 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_svg/flutter_svg.dart';
 
-/// Reusable widget for displaying the YALT circular logo (`logo_bulat`).
-/// Uses `assets/images/logo_bulat.svg` with high resolution raster fallback.
+/// Widget logo bulat YALT (`assets/images/logo_bulat.svg`).
 class AppLogo extends StatelessWidget {
   final double size;
 
@@ -21,12 +20,7 @@ class AppLogo extends StatelessWidget {
         width: size,
         height: size,
         fit: BoxFit.contain,
-        placeholderBuilder: (BuildContext context) => Image.asset(
-          'assets/images/logo_bulat.png',
-          width: size,
-          height: size,
-          fit: BoxFit.contain,
-        ),
+        placeholderBuilder: (_) => SizedBox(width: size, height: size),
       ),
     );
   }

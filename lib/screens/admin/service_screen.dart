@@ -1,7 +1,9 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 
 import '../../models/service_model.dart';
 import '../../repositories/service_repository.dart';
+import '../../widgets/state_views.dart';
 
 class ServiceScreen extends StatefulWidget {
   const ServiceScreen({super.key});
@@ -55,20 +57,6 @@ class _ServiceScreenState extends State<ServiceScreen> {
     _loadServices();
   }
 
-  // controller untuk dialog tambah layanan
-  final TextEditingController _nameController = TextEditingController();
-  final TextEditingController _priceController = TextEditingController();
-  final TextEditingController _durationController = TextEditingController();
-
-  @override
-  void dispose() {
-    // controller dibersihkan agar tidak memory leak
-    _nameController.dispose();
-    _priceController.dispose();
-    _durationController.dispose();
-    super.dispose();
-  }
-
   // jalankan request simpan ke API, tampilkan pesan sukses / gagal
   Future<void> _save(
     Future<void> Function() request,
@@ -93,41 +81,24 @@ class _ServiceScreenState extends State<ServiceScreen> {
         .showSnackBar(SnackBar(backgroundColor: success ? Colors.green : Colors.red, content: Text(message)));
   }
 
-  // dialog form nama, tarif & estimasi, hasil pop berisi (nama, tarif, jam) atau null jika batal
-  Future<(String, double, int)?> _showServiceDialog({required String title, required String nameLabel}) {
+  // dialog form nama, tarif & estimasi dengan validasi jelas
+  Future<(String, double, int)?> _showServiceDialog({
+    required String title,
+    required String nameLabel,
+    ServiceModel? initial,
+  }) {
     return showDialog<(String, double, int)>(
       context: context,
-      builder: (ctx) => AlertDialog(
-        // isi dialog bisa di-scroll agar form tetap terlihat saat keyboard muncul (terutama landscape)
-        scrollable: true,
-        title: Text(title),
-        content: _buildServiceForm(nameLabel),
-        actions: [
-          TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('Batal')),
-          ElevatedButton(
-            onPressed: () {
-              final name = _nameController.text.trim();
-              final price = double.tryParse(_priceController.text) ?? 0.0;
-              final hours = int.tryParse(_durationController.text) ?? 0;
-
-              if (name.isNotEmpty && price > 0 && hours >= 1 && hours <= 720) {
-                // kirim isian form ke halaman pemanggil lewat hasil pop
-                Navigator.pop(ctx, (name, price, hours));
-              }
-            },
-            child: const Text('Simpan'),
-          ),
-        ],
+      builder: (ctx) => _ServiceFormDialog(
+        title: title,
+        nameLabel: nameLabel,
+        initial: initial,
       ),
     );
   }
 
   // untuk memunculkan Modal Popup Tambah Layanan, lalu simpan ke Supabase
   Future<void> _showAddServiceDialog() async {
-    _nameController.clear();
-    _priceController.clear();
-    _durationController.text = '48';
-
     final input = await _showServiceDialog(
       title: 'Tambah Layanan Baru',
       nameLabel: 'Nama Layanan (misal: Cuci Bedcover)',
@@ -136,19 +107,22 @@ class _ServiceScreenState extends State<ServiceScreen> {
 
     await _save(() async {
       final newService = await _repository.addService(input.$1, input.$2, durationHours: input.$3);
-      // tambah hasil dari server lalu setState biar ListView terupdate
-      setState(() => _services.add(newService));
+      if (!mounted) return;
+      // tambah hasil dari server lalu urutkan abjad sesuai urutan query
+      setState(() {
+        _services.add(newService);
+        _services.sort((a, b) => a.name.toLowerCase().compareTo(b.name.toLowerCase()));
+      });
     }, 'Layanan "${input.$1}" berhasil ditambahkan');
   }
 
   // untuk memunculkan Modal Popup Edit Nama & Tarif Layanan, lalu simpan ke Supabase
   Future<void> _showEditServiceDialog(ServiceModel service) async {
-    // isi form dengan data lama memakai getter
-    _nameController.text = service.name;
-    _priceController.text = service.pricePerKG.toStringAsFixed(0);
-    _durationController.text = service.durationHours.toString();
-
-    final input = await _showServiceDialog(title: 'Ubah Layanan', nameLabel: 'Nama Layanan');
+    final input = await _showServiceDialog(
+      title: 'Ubah Layanan',
+      nameLabel: 'Nama Layanan',
+      initial: service,
+    );
     if (input == null || !mounted) return;
 
     await _save(() async {
@@ -158,6 +132,7 @@ class _ServiceScreenState extends State<ServiceScreen> {
         pricePerKG: input.$2,
         durationHours: input.$3,
       );
+      if (!mounted) return;
       _replaceService(updated);
     }, 'Layanan "${input.$1}" berhasil diubah');
   }
@@ -166,6 +141,7 @@ class _ServiceScreenState extends State<ServiceScreen> {
   Future<void> _toggleActive(ServiceModel service, bool isActive) async {
     await _save(() async {
       final updated = await _repository.updateService(service.id, isActive: isActive);
+      if (!mounted) return;
       _replaceService(updated);
     }, isActive ? 'Layanan "${service.name}" diaktifkan' : 'Layanan "${service.name}" dinonaktifkan');
   }
@@ -195,6 +171,7 @@ class _ServiceScreenState extends State<ServiceScreen> {
     var message = '';
     await _save(() async {
       final action = await _repository.deleteService(service.id);
+      if (!mounted) return;
       if (action == ServiceDeleteAction.deleted) {
         setState(() => _services.removeWhere((s) => s.id == service.id));
         message = 'Layanan "${service.name}" dihapus';
@@ -215,36 +192,10 @@ class _ServiceScreenState extends State<ServiceScreen> {
   void _replaceService(ServiceModel updated) {
     final index = _services.indexWhere((s) => s.id == updated.id);
     if (index == -1) return;
-    setState(() => _services[index] = updated);
-  }
-
-  // form isian nama & tarif yang dipakai dialog tambah dan edit
-  Widget _buildServiceForm(String nameLabel) {
-    return Column(
-      mainAxisSize: MainAxisSize.min, // agar tinggi modal pas dengan isi
-      children: [
-        TextField(
-          controller: _nameController,
-          decoration: InputDecoration(labelText: nameLabel),
-        ),
-        const SizedBox(height: 12),
-        TextField(
-          controller: _priceController,
-          keyboardType: TextInputType.number,
-          decoration: const InputDecoration(labelText: 'Tarif per Kg (Rp)', prefixText: 'Rp '),
-        ),
-        const SizedBox(height: 12),
-        TextField(
-          controller: _durationController,
-          keyboardType: TextInputType.number,
-          decoration: const InputDecoration(
-            labelText: 'Estimasi Pengerjaan',
-            suffixText: 'jam',
-            helperText: 'Dipakai menghitung estimasi selesai (1 - 720 jam)',
-          ),
-        ),
-      ],
-    );
+    setState(() {
+      _services[index] = updated;
+      _services.sort((a, b) => a.name.toLowerCase().compareTo(b.name.toLowerCase()));
+    });
   }
 
   @override
@@ -275,20 +226,9 @@ class _ServiceScreenState extends State<ServiceScreen> {
     }
 
     if (_errorMessage != null && _services.isEmpty) {
-      return Center(
-        child: Padding(
-          padding: const EdgeInsets.all(24),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              const Icon(Icons.cloud_off, size: 56, color: Colors.grey),
-              const SizedBox(height: 12),
-              Text(_errorMessage!, textAlign: TextAlign.center),
-              const SizedBox(height: 16),
-              FilledButton.icon(onPressed: _retry, icon: const Icon(Icons.refresh), label: const Text('Coba Lagi')),
-            ],
-          ),
-        ),
+      return RefreshIndicator(
+        onRefresh: _loadServices,
+        child: ErrorStateView(message: _errorMessage!, onRetry: _retry),
       );
     }
 
@@ -300,10 +240,7 @@ class _ServiceScreenState extends State<ServiceScreen> {
               // tetap bisa ditarik walau kosong
               physics: const AlwaysScrollableScrollPhysics(),
               children: const [
-                SizedBox(height: 160),
-                Icon(Icons.local_laundry_service_outlined, size: 56, color: Colors.grey),
-                SizedBox(height: 12),
-                Text('Belum ada layanan.', textAlign: TextAlign.center),
+                EmptyStateView(message: 'Belum ada layanan.', icon: Icons.local_laundry_service_outlined),
               ],
             )
           // ListView untuk menampilkan kumpulan daftar layanan
@@ -351,6 +288,124 @@ class _ServiceScreenState extends State<ServiceScreen> {
                 );
               },
             ),
+    );
+  }
+}
+
+/// Dialog form tambah / ubah layanan dengan validasi per kolom.
+class _ServiceFormDialog extends StatefulWidget {
+  final String title;
+  final String nameLabel;
+  final ServiceModel? initial;
+
+  const _ServiceFormDialog({
+    required this.title,
+    required this.nameLabel,
+    this.initial,
+  });
+
+  @override
+  State<_ServiceFormDialog> createState() => _ServiceFormDialogState();
+}
+
+class _ServiceFormDialogState extends State<_ServiceFormDialog> {
+  final _formKey = GlobalKey<FormState>();
+  late final TextEditingController _nameController;
+  late final TextEditingController _priceController;
+  late final TextEditingController _durationController;
+
+  @override
+  void initState() {
+    super.initState();
+    _nameController = TextEditingController(text: widget.initial?.name ?? '');
+    _priceController = TextEditingController(
+      text: widget.initial != null ? widget.initial!.pricePerKG.toStringAsFixed(0) : '',
+    );
+    _durationController = TextEditingController(
+      text: (widget.initial?.durationHours ?? 48).toString(),
+    );
+  }
+
+  @override
+  void dispose() {
+    _nameController.dispose();
+    _priceController.dispose();
+    _durationController.dispose();
+    super.dispose();
+  }
+
+  double? _parsePrice(String raw) {
+    final cleaned = raw.trim().replaceAll('.', '').replaceAll(',', '');
+    return double.tryParse(cleaned);
+  }
+
+  void _submit() {
+    if (!_formKey.currentState!.validate()) return;
+    final name = _nameController.text.trim();
+    final price = _parsePrice(_priceController.text)!;
+    final hours = int.parse(_durationController.text.trim());
+    Navigator.pop(context, (name, price, hours));
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return AlertDialog(
+      scrollable: true,
+      title: Text(widget.title),
+      content: Form(
+        key: _formKey,
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            TextFormField(
+              controller: _nameController,
+              maxLength: 100,
+              decoration: InputDecoration(labelText: widget.nameLabel, counterText: ''),
+              validator: (value) {
+                final text = (value ?? '').trim();
+                if (text.isEmpty) return 'Nama layanan tidak boleh kosong';
+                if (text.length > 100) return 'Nama layanan maksimal 100 huruf';
+                return null;
+              },
+            ),
+            const SizedBox(height: 12),
+            TextFormField(
+              controller: _priceController,
+              keyboardType: TextInputType.number,
+              inputFormatters: [FilteringTextInputFormatter.allow(RegExp(r'[0-9.]'))],
+              decoration: const InputDecoration(labelText: 'Tarif per Kg (Rp)', prefixText: 'Rp '),
+              validator: (value) {
+                final price = _parsePrice(value ?? '');
+                if (price == null || price <= 0) return 'Tarif per kg harus lebih dari 0';
+                if (price > 10000000) return 'Tarif per kg terlalu besar';
+                return null;
+              },
+            ),
+            const SizedBox(height: 12),
+            TextFormField(
+              controller: _durationController,
+              keyboardType: TextInputType.number,
+              inputFormatters: [FilteringTextInputFormatter.digitsOnly],
+              decoration: const InputDecoration(
+                labelText: 'Estimasi Pengerjaan',
+                suffixText: 'jam',
+                helperText: 'Dipakai menghitung estimasi selesai (1 - 720 jam)',
+              ),
+              validator: (value) {
+                final hours = int.tryParse((value ?? '').trim());
+                if (hours == null || hours < 1 || hours > 720) {
+                  return 'Estimasi harus antara 1 sampai 720 jam';
+                }
+                return null;
+              },
+            ),
+          ],
+        ),
+      ),
+      actions: [
+        TextButton(onPressed: () => Navigator.pop(context), child: const Text('Batal')),
+        ElevatedButton(onPressed: _submit, child: const Text('Simpan')),
+      ],
     );
   }
 }

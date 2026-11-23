@@ -98,7 +98,12 @@ PostgrestException _error(String code, String message, [String? hint]) =>
 
 class FakeAuthRepository extends AuthRepository {
   final FakeBackend db;
-  FakeAuthRepository(this.db);
+  CustomerModel? savedUser;
+
+  FakeAuthRepository(this.db, {this.savedUser});
+
+  @override
+  Future<CustomerModel?> restoreSession() async => savedUser;
 
   @override
   Future<CustomerModel> signIn(String phone, String password) async {
@@ -106,11 +111,14 @@ class FakeAuthRepository extends AuthRepository {
     if (user == null || db.passwords[user.phone] != password) {
       throw const AuthFailure('Nomor HP atau password salah');
     }
+    savedUser = user;
     return user;
   }
 
   @override
-  Future<void> signOut() async {}
+  Future<void> signOut() async {
+    savedUser = null;
+  }
 
   @override
   Future<void> changePassword(String phone, String oldPassword, String newPassword) async {
@@ -187,6 +195,21 @@ class FakeOrderRepository extends OrderRepository {
       db.orders.where((o) => customerId == null || o.customerId == customerId).take(limit).toList();
 
   @override
+  Future<OrderSummary> fetchOrderSummary() async {
+    final active = db.orders.where((o) => o.isActive).length;
+    final completed = db.orders.where((o) => o.isCollected).toList();
+    return OrderSummary(
+      activeCount: active,
+      completedCount: completed.length,
+      collectedRevenue: completed.fold(0.0, (sum, o) => sum + o.totalPrice),
+    );
+  }
+
+  @override
+  Future<int> fetchCustomerOrderCount(String customerId) async =>
+      db.orders.where((o) => o.customerId == customerId).length;
+
+  @override
   Future<OrderModel> fetchOrder(String id) async => _find(id);
 
   @override
@@ -241,8 +264,10 @@ class FakeOrderRepository extends OrderRepository {
   }
 
   @override
-  Future<String?> fetchPickupToken(String orderId) async =>
-      _find(orderId).isCollected ? null : db.tokens[orderId];
+  Future<String?> fetchPickupToken(String orderId) async {
+    final order = _find(orderId);
+    return order.isReadyForPickup ? db.tokens[orderId] : null;
+  }
 
   @override
   Future<OrderModel> pickupByToken(String rawToken) async {
@@ -258,5 +283,5 @@ class FakeOrderRepository extends OrderRepository {
   }
 
   @override
-  void Function() watchOrders(void Function() onChange, {String? customerId}) => () {};
+  void Function() watchOrders(void Function() onChange, {String? customerId, String? orderId}) => () {};
 }

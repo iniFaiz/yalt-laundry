@@ -18,12 +18,16 @@ class ServiceModel {
   // getter nama layanan
   String get name => _name;
 
-  // setter nama layanan, tidak boleh kosong
+  // setter nama layanan, tidak boleh kosong dan maksimal 100 huruf
   set name(String value) {
-    if (value.trim().isEmpty) {
+    final trimmed = value.trim();
+    if (trimmed.isEmpty) {
       throw ArgumentError('Nama layanan tidak boleh kosong');
     }
-    _name = value.trim();
+    if (trimmed.length > 100) {
+      throw ArgumentError('Nama layanan maksimal 100 huruf');
+    }
+    _name = trimmed;
   }
 
   // getter tarif per kg
@@ -58,10 +62,14 @@ class ServiceModel {
 
   // konversi dari baris json tabel services (Supabase) ke object model
   factory ServiceModel.fromJson(Map<String, dynamic> json) {
+    final rawPrice = json['price_per_kg'];
+    final price = rawPrice is num
+        ? rawPrice.toDouble()
+        : double.tryParse(rawPrice?.toString() ?? '') ?? 0.0;
     return ServiceModel(
       id: json['id'] as String,
       name: json['name'] as String,
-      pricePerKG: (json['price_per_kg'] as num).toDouble(),
+      pricePerKG: price,
       isActive: json['is_active'] as bool? ?? true,
       durationHours: (json['duration_hours'] as num?)?.toInt() ?? 48,
     );

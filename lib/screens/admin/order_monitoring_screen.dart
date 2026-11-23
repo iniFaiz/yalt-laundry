@@ -13,13 +13,16 @@ class OrderMonitoringScreen extends StatefulWidget {
   const OrderMonitoringScreen({super.key});
 
   @override
-  State<OrderMonitoringScreen> createState() => _OrderMonitoringScreenState();
+  State<OrderMonitoringScreen> createState() => OrderMonitoringScreenState();
 }
 
-class _OrderMonitoringScreenState extends State<OrderMonitoringScreen> {
+class OrderMonitoringScreenState extends State<OrderMonitoringScreen> {
   final OrderRepository _repository = OrderRepository.instance;
+  final TextEditingController _searchController = TextEditingController();
 
   List<OrderModel> _orders = [];
+  OrderSummary? _summary; // agregat akurat dari daily_order_report_view (tidak terpotong limit 200)
+  String _searchQuery = '';
   bool _isLoading = true; // status loading data awal
   String? _errorMessage;
   final Set<String> _updatingIds = {}; // pesanan yang sedang diubah statusnya
@@ -37,16 +40,24 @@ class _OrderMonitoringScreenState extends State<OrderMonitoringScreen> {
   @override
   void dispose() {
     _unsubscribe?.call();
+    _searchController.dispose();
     super.dispose();
   }
 
-  // ambil semua pesanan (admin melihat semua karena RLS)
+  // dipanggil saat admin berpindah kembali ke tab Monitoring
+  Future<void> refresh() => _loadOrders();
+
+  // ambil daftar pesanan dan ringkasan agregat dari daily_order_report_view secara paralel
   Future<void> _loadOrders() async {
     try {
-      final orders = await _repository.fetchOrders();
+      final results = await Future.wait<Object?>([
+        _repository.fetchOrders(),
+        _repository.fetchOrderSummary().then<OrderSummary?>((s) => s).catchError((_) => null),
+      ]);
       if (!mounted) return;
       setState(() {
-        _orders = orders;
+        _orders = results[0] as List<OrderModel>;
+        _summary = results[1] as OrderSummary? ?? _summary;
         _errorMessage = null;
         _isLoading = false;
       });
@@ -60,9 +71,22 @@ class _OrderMonitoringScreenState extends State<OrderMonitoringScreen> {
     }
   }
 
+  Future<void> _refreshSummaryOnly() async {
+    try {
+      final summary = await _repository.fetchOrderSummary();
+      if (mounted) setState(() => _summary = summary);
+    } catch (_) {
+      // biarkan angka sebelumnya jika view gagal dimuat sementara
+    }
+  }
+
   void _replaceOrder(OrderModel updated) {
     final index = _orders.indexWhere((o) => o.id == updated.id);
-    if (index != -1) _orders[index] = updated;
+    if (index != -1) {
+      _orders[index] = updated;
+    } else {
+      _orders.insert(0, updated);
+    }
   }
 
   // PEMBARUAN STATUS lewat RPC sp_update_order_status (transisi divalidasi database)
@@ -132,6 +156,7 @@ class _OrderMonitoringScreenState extends State<OrderMonitoringScreen> {
       if (!mounted) return;
       Navigator.pop(context); // tutup loading dialog
       setState(() => _replaceOrder(order));
+      _refreshSummaryOnly();
       _showScanResultDialog(
         success: true,
         title: 'Pengambilan Berhasil!',
@@ -150,8 +175,8 @@ class _OrderMonitoringScreenState extends State<OrderMonitoringScreen> {
         _ => 'Verifikasi Gagal',
       };
       _showScanResultDialog(success: false, title: title, message: OrderRepository.errorMessage(e));
+      _loadOrders();
     }
-    _loadOrders();
   }
 
   void _showScanResultDialog({required bool success, required String title, required String message}) {
@@ -172,13 +197,35 @@ class _OrderMonitoringScreenState extends State<OrderMonitoringScreen> {
     );
   }
 
+  List<OrderModel> _applySearch(List<OrderModel> source) {
+    final q = _searchQuery.trim().toLowerCase();
+    if (q.isEmpty) return source;
+    return source
+        .where((o) =>
+            o.code.toLowerCase().contains(q) ||
+            o.customerName.toLowerCase().contains(q) ||
+            o.customerPhone.contains(q))
+        .toList();
+  }
+
   @override
   Widget build(BuildContext context) {
-    // PERHITUNGAN LAPORAN dari data server
-    final active = _orders.where((o) => o.isActive).toList();
-    final completed = _orders.where((o) => o.isCollected).toList();
-    final totalRevenue = completed.fold(0.0, (sum, o) => sum + o.totalPrice);
-    final header = _buildReportCard(active.length, completed.length, totalRevenue);
+    final allActive = _orders.where((o) => o.isActive).toList();
+    final allCompleted = _orders.where((o) => o.isCollected).toList();
+    final active = _applySearch(allActive);
+    final completed = _applySearch(allCompleted);
+
+    // gunakan agregat akurat dari daily_order_report_view bila tersedia
+    final activeCount = _summary?.activeCount ?? allActive.length;
+    final completedCount = _summary?.completedCount ?? allCompleted.length;
+    final totalRevenue =
+        _summary?.collectedRevenue ?? allCompleted.fold<double>(0.0, (sum, o) => sum + o.totalPrice);
+    final header = Column(
+      children: [
+        _buildReportCard(activeCount, completedCount, totalRevenue),
+        _buildSearchField(),
+      ],
+    );
 
     return DefaultTabController(
       length: 2,
@@ -201,8 +248,7 @@ class _OrderMonitoringScreenState extends State<OrderMonitoringScreen> {
           icon: const Icon(Icons.qr_code_scanner),
           label: const Text('Scan QR Pickup'),
         ),
-        // kartu laporan ditaruh di dalam list tiap tab agar ikut ter-scroll,
-        // sehingga daftar pesanan tetap punya ruang di layar pendek (landscape)
+        // kartu laporan & pencarian ditaruh di dalam list tiap tab agar ikut ter-scroll
         body: _isLoading
             ? const Center(child: CircularProgressIndicator())
             : TabBarView(
@@ -217,6 +263,32 @@ class _OrderMonitoringScreenState extends State<OrderMonitoringScreen> {
                   ),
                 ],
               ),
+      ),
+    );
+  }
+
+  Widget _buildSearchField() {
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 12),
+      child: TextField(
+        controller: _searchController,
+        onChanged: (value) => setState(() => _searchQuery = value),
+        decoration: InputDecoration(
+          isDense: true,
+          hintText: 'Cari kode ORD, nama, atau nomor HP...',
+          prefixIcon: const Icon(Icons.search),
+          suffixIcon: _searchQuery.isEmpty
+              ? null
+              : IconButton(
+                  tooltip: 'Hapus pencarian',
+                  icon: const Icon(Icons.clear),
+                  onPressed: () {
+                    _searchController.clear();
+                    setState(() => _searchQuery = '');
+                  },
+                ),
+          border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
+        ),
       ),
     );
   }
@@ -283,8 +355,12 @@ class _OrderMonitoringScreenState extends State<OrderMonitoringScreen> {
         children: [
           header,
           EmptyStateView(
-            message: isActiveList ? 'Tidak ada cucian aktif' : 'Belum ada pesanan yang selesai',
-            icon: isActiveList ? Icons.local_laundry_service_outlined : Icons.history,
+            message: _searchQuery.trim().isNotEmpty
+                ? 'Pesanan tidak ditemukan untuk "${_searchQuery.trim()}"'
+                : (isActiveList ? 'Tidak ada cucian aktif' : 'Belum ada pesanan yang selesai'),
+            icon: _searchQuery.trim().isNotEmpty
+                ? Icons.search_off
+                : (isActiveList ? Icons.local_laundry_service_outlined : Icons.history),
           ),
         ],
       );
@@ -293,7 +369,7 @@ class _OrderMonitoringScreenState extends State<OrderMonitoringScreen> {
     return ListView.builder(
       physics: const AlwaysScrollableScrollPhysics(),
       padding: const EdgeInsets.fromLTRB(12, 12, 12, 88), // ruang bawah untuk tombol mengambang
-      // item pertama adalah kartu laporan, sisanya kartu pesanan
+      // item pertama adalah kartu laporan + pencarian, sisanya kartu pesanan
       itemCount: orders.length + 1,
       itemBuilder: (context, index) {
         if (index == 0) return header;
@@ -336,7 +412,9 @@ class _OrderMonitoringScreenState extends State<OrderMonitoringScreen> {
               Text('${order.formattedWeight} • Total: ${order.formattedTotalPrice}'),
               Text(
                 order.isCollected
-                    ? 'Diambil: ${formatDayTime(order.pickupTokenUsedAt!)}'
+                    ? (order.pickupTokenUsedAt != null
+                        ? 'Diambil: ${formatDayTime(order.pickupTokenUsedAt!)}'
+                        : 'Sudah diambil')
                     : 'Estimasi selesai: ${formatDayTime(order.estimatedCompletionAt)}',
                 style: const TextStyle(fontSize: 12, color: Colors.grey),
               ),

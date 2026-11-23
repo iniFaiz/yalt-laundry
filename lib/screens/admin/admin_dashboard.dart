@@ -17,13 +17,31 @@ class _AdminDashboardState extends State<AdminDashboard> {
   // var index tab aktif
   int _currentIndex = 0;
 
-  // daftar halamannya
-  final List<Widget> _pages = [
-    const OrderEntryScreen(),
-    const OrderMonitoringScreen(),
-    const CustomerScreen(),
-    const ServiceScreen(),
-  ];
+  // tab dibuat saat pertama kali dibuka lalu dipertahankan di IndexedStack
+  // agar draft Kasir POS tidak hilang saat pindah tab dan tidak boros request di awal
+  final Set<int> _visitedTabs = {0};
+
+  final _posKey = GlobalKey<OrderEntryScreenState>();
+  final _monitoringKey = GlobalKey<OrderMonitoringScreenState>();
+  final _customerKey = GlobalKey<CustomerScreenState>();
+
+  void _selectTab(int index) {
+    final alreadyVisited = _visitedTabs.contains(index);
+    setState(() {
+      _currentIndex = index;
+      _visitedTabs.add(index);
+    });
+    if (!alreadyVisited) return;
+    // segarkan data referensi secara ringan tanpa menghapus isian form
+    switch (index) {
+      case 0:
+        _posKey.currentState?.refreshReferenceData();
+      case 1:
+        _monitoringKey.currentState?.refresh();
+      case 2:
+        _customerKey.currentState?.refresh();
+    }
+  }
 
   void _showLogoutDialog(BuildContext context) {
     showDialog(
@@ -73,15 +91,19 @@ class _AdminDashboardState extends State<AdminDashboard> {
           ),
         ],
       ),
-      body: _pages[_currentIndex],
+      body: IndexedStack(
+        index: _currentIndex,
+        children: [
+          OrderEntryScreen(key: _posKey),
+          _visitedTabs.contains(1) ? OrderMonitoringScreen(key: _monitoringKey) : const SizedBox.shrink(),
+          _visitedTabs.contains(2) ? CustomerScreen(key: _customerKey) : const SizedBox.shrink(),
+          _visitedTabs.contains(3) ? const ServiceScreen() : const SizedBox.shrink(),
+        ],
+      ),
       // navbarnya
       bottomNavigationBar: NavigationBar(
         selectedIndex: _currentIndex,
-        onDestinationSelected: (int index) {
-          setState(() {
-            _currentIndex = index;
-          });
-        },
+        onDestinationSelected: _selectTab,
         destinations: const [
           NavigationDestination(
             icon: Icon(Icons.point_of_sale_outlined),

@@ -131,12 +131,16 @@ begin
     n := n || 'UPDATE langsung ke tabel orders ditolak (42501)'::text;
     p := p || v_ok; d := d || v_detail;
 
-    -- 10 pelanggan mengambil token QR miliknya ---------------------------
+    -- 10 sebelum siap_diambil, sp_get_pickup_token tidak membocorkan token --
     v_json := public.sp_get_pickup_token(v_order_id);
-    v_token := v_json ->> 'pickup_token';
-    n := n || 'sp_get_pickup_token: pemilik pesanan mendapat token acak 32 karakter'::text;
-    p := p || (v_token ~ '^[0-9a-f]{32}$');
-    d := d || coalesce(left(v_token, 6) || '...', 'null');
+    n := n || 'sp_get_pickup_token: token masih null saat status belum siap_diambil'::text;
+    p := p || (v_json ->> 'pickup_token' is null and v_json ->> 'status' = 'diterima');
+    d := d || v_json::text;
+
+    -- ambil token langsung sebagai pemilik DB khusus untuk menguji penolakan not_ready di tes 14
+    perform set_config('role', 'none', true);
+    select pickup_token into v_token from public.orders where id = v_order_id;
+    perform set_config('role', 'authenticated', true);
 
     -- 11 pelanggan B tidak bisa mengambil token milik A --------------------
     perform set_config('request.jwt.claims', json_build_object('sub', c_cust_b, 'role', 'authenticated')::text, true);
@@ -180,12 +184,15 @@ begin
     n := n || 'Scan QR saat status masih diterima ditolak (not_ready)'::text;
     p := p || v_ok; d := d || v_detail;
 
-    -- 15 alur valid ----------------------------------------------------------
+    -- 15 alur valid & pemilik kini mendapat token 32 karakter hex ------------
     perform public.sp_update_order_status(v_order_id, 'dicuci');
     v_json := public.sp_update_order_status(v_order_id, 'siap_diambil');
-    n := n || 'Transisi valid diterima -> dicuci -> siap_diambil berhasil'::text;
-    p := p || (v_json ->> 'status' = 'siap_diambil');
-    d := d || (v_json ->> 'status');
+    perform set_config('request.jwt.claims', json_build_object('sub', c_cust_a, 'role', 'authenticated')::text, true);
+    v_token := public.sp_get_pickup_token(v_order_id) ->> 'pickup_token';
+    perform set_config('request.jwt.claims', json_build_object('sub', c_admin, 'role', 'authenticated')::text, true);
+    n := n || 'Transisi valid diterima -> dicuci -> siap_diambil & token QR aktif'::text;
+    p := p || (v_json ->> 'status' = 'siap_diambil' and v_token ~ '^[0-9a-f]{32}$');
+    d := d || format('status=%s token=%s', v_json ->> 'status', coalesce(left(v_token, 6) || '...', 'null'));
 
     -- 16 token salah ------------------------------------------------------------
     begin
@@ -354,7 +361,7 @@ begin
     v_json := public.admin_create_customer('Pelanggan Tes', '089900001234', 'rahasia1');
     v_new_customer := (v_json ->> 'id')::uuid;
     begin
-      perform public.admin_create_customer('Pelanggan Ganda', '089900001234');
+      perform public.admin_create_customer('Pelanggan Ganda', '089900001234', 'rahasia1');
       v_ok := false; v_detail := 'duplikat tidak ditolak';
     exception when others then
       v_ok := sqlstate = '23505'; v_detail := sqlstate || ' ' || sqlerrm;
@@ -392,7 +399,7 @@ begin
     -- 33
     perform set_config('request.jwt.claims', json_build_object('sub', c_cust_a, 'role', 'authenticated')::text, true);
     begin
-      perform public.admin_create_customer('Penyusup', '089911112222');
+      perform public.admin_create_customer('Penyusup', '089911112222', 'rahasia1');
       v_ok := false; v_detail := 'tidak ditolak';
     exception when others then
       v_ok := sqlstate = '42501'; v_detail := sqlstate || ' ' || sqlerrm;
@@ -422,6 +429,22 @@ begin
     end;
     n := n || 'Hardening: anon membaca layanan, is_admin() ditolak (42501)'::text;
     p := p || (v_ok and v_count > 0); d := d || format('layanan=%s | %s', v_count, v_detail);
+
+    -- 36 hardening: catatan > 500 karakter ditolak (22023)
+    perform set_config('role', 'authenticated', true);
+    perform set_config('request.jwt.claims', json_build_object('sub', c_admin, 'role', 'authenticated')::text, true);
+    begin
+      perform public.sp_create_order(
+        c_cust_a,
+        jsonb_build_array(jsonb_build_object('service_id', v_svc1.id, 'weight_kg', 1)),
+        repeat('a', 501)
+      );
+      v_ok := false; v_detail := 'tidak ditolak';
+    exception when others then
+      v_ok := sqlstate = '22023'; v_detail := sqlstate || ' ' || sqlerrm;
+    end;
+    n := n || 'Hardening: catatan pesanan > 500 karakter ditolak (22023)'::text;
+    p := p || v_ok; d := d || v_detail;
 
     -- batalkan semua data tes
     raise exception using errcode = 'P0099', message = 'rollback_test_data';

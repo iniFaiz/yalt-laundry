@@ -8,13 +8,15 @@ class CustomerScreen extends StatefulWidget {
   const CustomerScreen({super.key});
 
   @override
-  State<CustomerScreen> createState() => _CustomerScreenState();
+  State<CustomerScreen> createState() => CustomerScreenState();
 }
 
-class _CustomerScreenState extends State<CustomerScreen> {
+class CustomerScreenState extends State<CustomerScreen> {
   final CustomerRepository _repository = CustomerRepository.instance;
+  final TextEditingController _searchController = TextEditingController();
 
   List<CustomerModel> _customers = [];
+  String _searchQuery = '';
   bool _isLoading = true;
   String? _errorMessage;
 
@@ -24,6 +26,15 @@ class _CustomerScreenState extends State<CustomerScreen> {
     super.initState();
     _loadCustomers();
   }
+
+  @override
+  void dispose() {
+    _searchController.dispose();
+    super.dispose();
+  }
+
+  // dipanggil saat admin berpindah kembali ke tab Pelanggan
+  Future<void> refresh() => _loadCustomers();
 
   // ambil daftar pelanggan + jumlah pesanan (GET /rest/v1/customer_summary_view)
   Future<void> _loadCustomers() async {
@@ -105,6 +116,14 @@ class _CustomerScreenState extends State<CustomerScreen> {
     }
   }
 
+  List<CustomerModel> get _filteredCustomers {
+    final q = _searchQuery.trim().toLowerCase();
+    if (q.isEmpty) return _customers;
+    return _customers
+        .where((c) => c.name.toLowerCase().contains(q) || c.phone.contains(q))
+        .toList();
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -124,6 +143,32 @@ class _CustomerScreenState extends State<CustomerScreen> {
     );
   }
 
+  Widget _buildSearchField() {
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 12),
+      child: TextField(
+        controller: _searchController,
+        onChanged: (value) => setState(() => _searchQuery = value),
+        decoration: InputDecoration(
+          isDense: true,
+          hintText: 'Cari nama atau nomor HP...',
+          prefixIcon: const Icon(Icons.search),
+          suffixIcon: _searchQuery.isEmpty
+              ? null
+              : IconButton(
+                  tooltip: 'Hapus pencarian',
+                  icon: const Icon(Icons.clear),
+                  onPressed: () {
+                    _searchController.clear();
+                    setState(() => _searchQuery = '');
+                  },
+                ),
+          border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
+        ),
+      ),
+    );
+  }
+
   Widget _buildList() {
     if (_errorMessage != null && _customers.isEmpty) {
       return ErrorStateView(message: _errorMessage!, onRetry: _retry);
@@ -137,13 +182,29 @@ class _CustomerScreenState extends State<CustomerScreen> {
       );
     }
 
-    // ListView untuk menampilkan kumpulan daftar pelanggan
+    final filtered = _filteredCustomers;
+    if (filtered.isEmpty) {
+      return ListView(
+        physics: const AlwaysScrollableScrollPhysics(),
+        padding: const EdgeInsets.all(16),
+        children: [
+          _buildSearchField(),
+          EmptyStateView(
+            message: 'Pelanggan tidak ditemukan untuk "${_searchQuery.trim()}"',
+            icon: Icons.search_off,
+          ),
+        ],
+      );
+    }
+
+    // ListView untuk menampilkan kolom pencarian + daftar pelanggan
     return ListView.builder(
       physics: const AlwaysScrollableScrollPhysics(),
       padding: const EdgeInsets.fromLTRB(16, 16, 16, 88), // ruang bawah untuk tombol mengambang
-      itemCount: _customers.length,
+      itemCount: filtered.length + 1,
       itemBuilder: (context, index) {
-        final customer = _customers[index];
+        if (index == 0) return _buildSearchField();
+        final customer = filtered[index - 1];
         return Card(
           margin: const EdgeInsets.only(bottom: 12),
           child: ListTile(
@@ -152,7 +213,7 @@ class _CustomerScreenState extends State<CustomerScreen> {
             leading: CircleAvatar(
               backgroundColor: Colors.blue.shade100,
               child: Text(
-                customer.name[0].toUpperCase(),
+                customer.name.isNotEmpty ? customer.name[0].toUpperCase() : '?',
                 style: const TextStyle(fontWeight: FontWeight.bold, color: Colors.blue),
               ),
             ),

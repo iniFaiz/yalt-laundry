@@ -37,7 +37,7 @@ class CustomerModel {
     _phone = value.trim();
   }
 
-  // validasi password baru, minimal 6 karakter tanpa spasi
+  // validasi password baru, minimal 6 karakter tanpa spasi / whitespace
   static String? validatePassword(String value) {
     if (value.isEmpty) {
       return 'Password tidak boleh kosong';
@@ -45,7 +45,7 @@ class CustomerModel {
     if (value.length < 6) {
       return 'Password minimal 6 karakter';
     }
-    if (value.contains(' ')) {
+    if (RegExp(r'\s').hasMatch(value)) {
       return 'Password tidak boleh mengandung spasi';
     }
     return null;
@@ -53,11 +53,15 @@ class CustomerModel {
 
   // validasi nama, return pesan error atau null jika valid
   static String? validateName(String value) {
-    if (value.trim().isEmpty) {
+    final trimmed = value.trim();
+    if (trimmed.isEmpty) {
       return 'Nama tidak boleh kosong';
     }
-    if (value.trim().length < 3) {
+    if (trimmed.length < 3) {
       return 'Nama minimal 3 huruf';
+    }
+    if (trimmed.length > 100) {
+      return 'Nama maksimal 100 huruf';
     }
     return null;
   }

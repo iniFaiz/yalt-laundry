@@ -46,6 +46,19 @@ class _QrScanScreenState extends State<QrScanScreen> {
     }
   }
 
+  Future<void> _toggleTorch() async {
+    try {
+      await _controller.toggleTorch();
+    } catch (e) {
+      debugPrint('Gagal mengubah lampu kilat: $e');
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).hideCurrentSnackBar();
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Lampu kilat tidak tersedia di perangkat ini')),
+      );
+    }
+  }
+
   void _submitManual() {
     final token = OrderRepository.parseQrToken(_manualController.text);
     if (token.isEmpty) return;
@@ -59,10 +72,17 @@ class _QrScanScreenState extends State<QrScanScreen> {
       appBar: AppBar(
         title: const Text('Scan QR Pengambilan'),
         actions: [
-          IconButton(
-            tooltip: 'Lampu kilat',
-            icon: const Icon(Icons.flash_on),
-            onPressed: () => _controller.toggleTorch(),
+          ValueListenableBuilder<MobileScannerState>(
+            valueListenable: _controller,
+            builder: (context, state, _) {
+              final available = state.isRunning && state.torchState != TorchState.unavailable;
+              final isOn = state.torchState == TorchState.on;
+              return IconButton(
+                tooltip: isOn ? 'Matikan lampu kilat' : 'Nyalakan lampu kilat',
+                icon: Icon(isOn ? Icons.flash_on : Icons.flash_off),
+                onPressed: available ? _toggleTorch : null,
+              );
+            },
           ),
         ],
       ),

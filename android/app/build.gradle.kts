@@ -7,7 +7,7 @@ plugins {
     id("dev.flutter.flutter-gradle-plugin")
 }
 
-// kunci upload Play Store dibaca dari android/key.properties (tidak di-commit, lihat key.properties.example)
+// kunci upload Play Store
 val keystorePropertiesFile = rootProject.file("key.properties")
 val keystoreProperties = Properties().apply {
     if (keystorePropertiesFile.exists()) load(FileInputStream(keystorePropertiesFile))
@@ -51,6 +51,13 @@ android {
 
     buildTypes {
         release {
+            // aktifkan R8 shrinking & obfuscation untuk ukuran AAB lebih kecil dan lebih aman
+            isMinifyEnabled = true
+            isShrinkResources = true
+            proguardFiles(
+                getDefaultProguardFile("proguard-android-optimize.txt"),
+                "proguard-rules.pro",
+            )
             // tanpa key.properties, build release memakai debug key (hanya untuk `flutter run --release`);
             // bundle bertanda tangan debug ditolak Play Console
             signingConfig = if (hasReleaseKey) signingConfigs.getByName("release") else signingConfigs.getByName("debug")

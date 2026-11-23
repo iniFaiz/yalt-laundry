@@ -94,15 +94,15 @@ void main() {
     await expectLater(adminRepo.updateStatus(created.id, 'siap_diambil'), postgrestError('PT409', 'invalid_transition'));
     await expectLater(adminRepo.updateStatus(created.id, 'diambil'), postgrestError('PT409', 'pickup_requires_qr'));
 
-    // QR belum aktif sebelum siap diambil
-    final token = (await prabowoRepo.fetchPickupToken(created.id))!;
-    expect(token, matches(RegExp(r'^[0-9a-f]{32}$')));
-    await expectLater(adminRepo.pickupByToken(token), postgrestError('PT409', 'not_ready'));
+    // QR belum aktif sebelum siap diambil (token belum dikirim)
+    expect(await prabowoRepo.fetchPickupToken(created.id), isNull);
 
-    // alur valid
+    // alur valid -> token aktif saat siap_diambil
     await adminRepo.updateStatus(created.id, 'dicuci');
     final ready = await adminRepo.updateStatus(created.id, 'siap_diambil');
     expect(ready.isReadyForPickup, isTrue);
+    final token = (await prabowoRepo.fetchPickupToken(created.id))!;
+    expect(token, matches(RegExp(r'^[0-9a-f]{32}$')));
 
     // dua scan QR bersamaan dari dua sesi admin: tepat satu yang berhasil (row lock)
     final admin2 = await loginAs(adminPhone);

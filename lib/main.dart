@@ -2,7 +2,11 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'config/env.dart';
+import 'models/customer_model.dart';
+import 'repositories/auth_repository.dart';
+import 'screens/home_screen.dart';
 import 'screens/login_screen.dart';
+import 'widgets/app_logo.dart';
 
 Future<void> main() async {
   // binding harus siap sebelum memanggil SystemChrome
@@ -40,8 +44,53 @@ class MyApp extends StatelessWidget {
         ),
         scaffoldBackgroundColor: Colors.white,
       ),
-      // halaman awal aplikasi, perpindahan halaman memakai Navigator push/pop
-      home: const LoginScreen(),
+      // cek sesi tersimpan dulu agar pengguna tidak perlu login ulang setiap buka aplikasi
+      home: const _AuthGate(),
+    );
+  }
+}
+
+/// Gerbang awal: memulihkan sesi Supabase tersimpan jika ada, atau menampilkan LoginScreen.
+class _AuthGate extends StatefulWidget {
+  const _AuthGate();
+
+  @override
+  State<_AuthGate> createState() => _AuthGateState();
+}
+
+class _AuthGateState extends State<_AuthGate> {
+  late final Future<CustomerModel?> _sessionFuture = AuthRepository.instance.restoreSession();
+
+  @override
+  Widget build(BuildContext context) {
+    return FutureBuilder<CustomerModel?>(
+      future: _sessionFuture,
+      builder: (context, snapshot) {
+        if (snapshot.connectionState != ConnectionState.done) {
+          return const Scaffold(
+            backgroundColor: Colors.white,
+            body: Center(
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  AppLogo(size: 96),
+                  SizedBox(height: 20),
+                  SizedBox(
+                    width: 24,
+                    height: 24,
+                    child: CircularProgressIndicator(strokeWidth: 2.5),
+                  ),
+                ],
+              ),
+            ),
+          );
+        }
+        final user = snapshot.data;
+        if (user != null) {
+          return HomeScreen(currentUser: user);
+        }
+        return const LoginScreen();
+      },
     );
   }
 }

@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import '../widgets/app_logo.dart';
 import '../repositories/auth_repository.dart';
 import 'home_screen.dart';
@@ -85,8 +86,8 @@ class _LoginScreenState extends State<LoginScreen> {
     const borderColor = Color(0xFFE5E7EB);
     const placeholderColor = Color(0xFF9CA3AF);
 
-    // menghitung ukuran layar dengan mediaquery agar responsif
-    final screenWidth = MediaQuery.of(context).size.width;
+    // menghitung ukuran layar dengan sizeOf agar tidak rebuild saat keyboard naik/turun
+    final screenWidth = MediaQuery.sizeOf(context).width;
     // batas lebar form responsif sesuai rumus lebar layar
     final formWidth = screenWidth > 500 ? 420.0 : screenWidth - 2 * (screenWidth * 0.08);
 
@@ -98,7 +99,8 @@ class _LoginScreenState extends State<LoginScreen> {
             padding: const EdgeInsets.symmetric(horizontal: 24.0, vertical: 24.0),
             child: SizedBox(
               width: formWidth,
-              child: Column(
+              child: AutofillGroup(
+                child: Column(
                 mainAxisAlignment: MainAxisAlignment.center,
                 crossAxisAlignment: CrossAxisAlignment.center,
                 children: [
@@ -182,6 +184,8 @@ class _LoginScreenState extends State<LoginScreen> {
                           child: TextField(
                             controller: _phoneController,
                             keyboardType: TextInputType.phone,
+                            autofillHints: const [AutofillHints.telephoneNumber],
+                            inputFormatters: [FilteringTextInputFormatter.digitsOnly],
                             textInputAction: TextInputAction.next,
                             style: const TextStyle(
                               fontFamily: 'Roboto',
@@ -238,6 +242,7 @@ class _LoginScreenState extends State<LoginScreen> {
                                 child: TextField(
                                   controller: _passwordController,
                                   obscureText: _obscurePassword,
+                                  autofillHints: const [AutofillHints.password],
                                   textInputAction: TextInputAction.done,
                                   onSubmitted: (_) => _handleLogin(),
                                   style: const TextStyle(
@@ -319,6 +324,7 @@ class _LoginScreenState extends State<LoginScreen> {
                     ),
                   ),
                 ],
+              ),
               ),
             ),
           ),

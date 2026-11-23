@@ -8,7 +8,8 @@ import '../../widgets/order_receipt.dart';
 import '../../widgets/order_status_badge.dart';
 
 /// Detail pesanan: timeline status beranimasi, QR pengambilan (pelanggan), dan struk digital.
-/// Data dimuat ulang dari server saat halaman dibuka, saat ditarik, dan saat pesanan berubah (Realtime).
+/// Data dimuat ulang dari server saat halaman dibuka, saat ditarik, saat kembali dari background,
+/// dan saat pesanan berubah (Realtime).
 class OrderDetailScreen extends StatefulWidget {
   final OrderModel order; // data awal dari daftar, langsung diperbarui dari server
   final bool isAdmin; // admin tidak melihat QR (token hanya untuk pelanggan)
@@ -19,7 +20,8 @@ class OrderDetailScreen extends StatefulWidget {
   State<OrderDetailScreen> createState() => _OrderDetailScreenState();
 }
 
-class _OrderDetailScreenState extends State<OrderDetailScreen> with SingleTickerProviderStateMixin {
+class _OrderDetailScreenState extends State<OrderDetailScreen>
+    with SingleTickerProviderStateMixin, WidgetsBindingObserver {
   final OrderRepository _repository = OrderRepository.instance;
 
   late OrderModel _order = widget.order;
@@ -28,26 +30,72 @@ class _OrderDetailScreenState extends State<OrderDetailScreen> with SingleTicker
   bool _isRefreshing = false;
   void Function()? _unsubscribe;
 
-  // animasi timeline: tiap langkah muncul bergantian
-  late final AnimationController _timelineController = AnimationController(
-    vsync: this,
-    duration: const Duration(milliseconds: 1400),
-  );
+  // animasi timeline: dibuat sekali di initState lalu di-dispose (mencegah memory leak)
+  late final AnimationController _timelineController;
+  late final List<CurvedAnimation> _scaleAnimations;
+  late final List<CurvedAnimation> _fadeAnimations;
+  late final List<CurvedAnimation> _lineAnimations;
 
   @override
   void initState() {
     super.initState();
+    WidgetsBinding.instance.addObserver(this);
+
+    final stepCount = OrderModel.statusFlow.length;
+    _timelineController = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 1400),
+    );
+    _scaleAnimations = List.generate(
+      stepCount,
+      (i) => CurvedAnimation(
+        parent: _timelineController,
+        curve: Interval(i / stepCount, (i + 1) / stepCount, curve: Curves.easeOutBack),
+      ),
+    );
+    _fadeAnimations = List.generate(
+      stepCount,
+      (i) => CurvedAnimation(
+        parent: _timelineController,
+        curve: Interval(i / stepCount, (i + 1) / stepCount, curve: Curves.easeOut),
+      ),
+    );
+    _lineAnimations = List.generate(
+      stepCount,
+      (i) => CurvedAnimation(
+        parent: _timelineController,
+        curve: Interval((i + 0.5) / stepCount, (i + 1) / stepCount, curve: Curves.easeOut),
+      ),
+    );
+
     _timelineController.forward();
     _refresh();
     if (!widget.isAdmin) {
-      // status berubah di server (admin update / scan QR) -> muat ulang otomatis
-      _unsubscribe = _repository.watchOrders(_refresh, customerId: _order.customerId);
+      // filter spesifik ke order ini saja agar perubahan pesanan lain tidak memicu reload
+      _unsubscribe = _repository.watchOrders(_refresh, orderId: _order.id);
+    }
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (state == AppLifecycleState.resumed) {
+      _refresh();
     }
   }
 
   @override
   void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
     _unsubscribe?.call();
+    for (final a in _scaleAnimations) {
+      a.dispose();
+    }
+    for (final a in _fadeAnimations) {
+      a.dispose();
+    }
+    for (final a in _lineAnimations) {
+      a.dispose();
+    }
     _timelineController.dispose();
     super.dispose();
   }
@@ -173,16 +221,6 @@ class _OrderDetailScreenState extends State<OrderDetailScreen> with SingleTicker
                   ? 'Estimasi: ${formatDayTime(_order.estimatedCompletionAt)}'
                   : 'Belum';
 
-          // tiap langkah punya jendela animasi sendiri (berurutan)
-          final animation = CurvedAnimation(
-            parent: _timelineController,
-            curve: Interval(i / steps.length, (i + 1) / steps.length, curve: Curves.easeOutBack),
-          );
-          final lineAnimation = CurvedAnimation(
-            parent: _timelineController,
-            curve: Interval((i + 0.5) / steps.length, (i + 1) / steps.length, curve: Curves.easeOut),
-          );
-
           return IntrinsicHeight(
             child: Row(
               crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -192,7 +230,7 @@ class _OrderDetailScreenState extends State<OrderDetailScreen> with SingleTicker
                   child: Column(
                     children: [
                       ScaleTransition(
-                        scale: animation,
+                        scale: _scaleAnimations[i],
                         child: Container(
                           width: 36,
                           height: 36,
@@ -218,7 +256,7 @@ class _OrderDetailScreenState extends State<OrderDetailScreen> with SingleTicker
                             color: Colors.grey.shade200,
                             // garis terisi warna (beranimasi dari atas) jika langkah berikutnya sudah tercapai.
                             // CustomPaint dipakai karena tidak menambah tinggi intrinsik baris timeline.
-                            child: i < currentStep ? CustomPaint(painter: _TimelineLinePainter(lineAnimation)) : null,
+                            child: i < currentStep ? CustomPaint(painter: _TimelineLinePainter(_lineAnimations[i])) : null,
                           ),
                         ),
                     ],
@@ -227,7 +265,7 @@ class _OrderDetailScreenState extends State<OrderDetailScreen> with SingleTicker
                 const SizedBox(width: 12),
                 Expanded(
                   child: FadeTransition(
-                    opacity: animation.drive(Tween(begin: 0.0, end: 1.0)),
+                    opacity: _fadeAnimations[i],
                     child: Padding(
                       padding: const EdgeInsets.only(bottom: 18, top: 2),
                       child: Column(
@@ -268,14 +306,16 @@ class _OrderDetailScreenState extends State<OrderDetailScreen> with SingleTicker
 
   // QR pengambilan: aktif hanya saat siap diambil, hangus setelah dipakai
   Widget _buildQrCard() {
-    final screenWidth = MediaQuery.of(context).size.width;
+    final screenWidth = MediaQuery.sizeOf(context).width;
     final qrBoxSize = (screenWidth * 0.55).clamp(160.0, 240.0);
     final token = _pickupToken;
     final isActive = _order.isReadyForPickup && token != null;
 
     final String message;
     if (_order.isCollected) {
-      message = 'QR sudah digunakan pada ${formatDayTime(_order.pickupTokenUsedAt!)}';
+      message = _order.pickupTokenUsedAt != null
+          ? 'QR sudah digunakan pada ${formatDayTime(_order.pickupTokenUsedAt!)}'
+          : 'QR sudah digunakan';
     } else if (_order.isReadyForPickup) {
       message = token == null ? 'Memuat QR...' : 'Tunjukkan QR ini ke kasir saat mengambil pakaian';
     } else {

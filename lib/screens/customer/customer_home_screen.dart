@@ -31,6 +31,7 @@ class _CustomerHomeScreenState extends State<CustomerHomeScreen> with WidgetsBin
   bool _isLoading = true; // status loading data awal
   String? _errorMessage;
   List<OrderModel> _orders = [];
+  int? _totalOrderCount; // jumlah akurat dari customer_summary_view (tidak terpotong limit 200)
   List<ServiceModel> _services = [];
   void Function()? _unsubscribe;
 
@@ -41,8 +42,8 @@ class _CustomerHomeScreenState extends State<CustomerHomeScreen> with WidgetsBin
     // daftarkan observer lifecycle aplikasi
     WidgetsBinding.instance.addObserver(this);
     _loadData();
-    // status cucian berubah di server (admin update / scan QR) -> muat ulang otomatis
-    _unsubscribe = OrderRepository.instance.watchOrders(_loadData, customerId: widget.customer.id);
+    // status cucian berubah di server -> muat ulang pesanan saja (tidak perlu refetch layanan)
+    _unsubscribe = OrderRepository.instance.watchOrders(_loadOrdersOnly, customerId: widget.customer.id);
   }
 
   // observer & langganan realtime dilepas saat halaman ditutup (lifecycle on destroy)
@@ -56,37 +57,29 @@ class _CustomerHomeScreenState extends State<CustomerHomeScreen> with WidgetsBin
   // dipanggil otomatis setiap status lifecycle aplikasi berubah
   @override
   void didChangeAppLifecycleState(AppLifecycleState state) {
-    if (state == AppLifecycleState.paused) {
-      // on pause: aplikasi masuk background (pindah app / layar dimatikan)
-      debugPrint('Lifecycle: on pause');
-    } else if (state == AppLifecycleState.resumed) {
-      // on resume: aplikasi dibuka lagi, muat ulang status cucian terbaru
-      debugPrint('Lifecycle: on resume');
-      _reloadOnResume();
+    if (state == AppLifecycleState.resumed && (ModalRoute.of(context)?.isCurrent ?? false)) {
+      // on resume saat halaman beranda sedang aktif: muat ulang diam-diam tanpa spam SnackBar
+      _loadOrdersOnly();
     }
   }
 
-  // fungsi asinkron muat ulang data saat aplikasi kembali dibuka
-  Future<void> _reloadOnResume() async {
-    await _loadData();
-    if (mounted && _errorMessage == null) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Status cucian diperbarui')),
-      );
-    }
-  }
-
-  // ambil pesanan milik pelanggan (dibatasi RLS) dan katalog layanan dari Supabase
+  // ambil pesanan milik pelanggan (dibatasi RLS), total pesanan, dan katalog layanan secara paralel
   Future<void> _loadData() async {
     try {
-      final results = await Future.wait([
+      final results = await Future.wait<Object?>([
         OrderRepository.instance.fetchOrders(customerId: widget.customer.id),
         ServiceRepository.instance.fetchServices(),
+        OrderRepository.instance
+            .fetchCustomerOrderCount(widget.customer.id)
+            .then<int?>((c) => c)
+            .catchError((_) => null),
       ]);
       if (!mounted) return;
+      final orders = results[0] as List<OrderModel>;
       setState(() {
-        _orders = results[0] as List<OrderModel>;
+        _orders = orders;
         _services = (results[1] as List<ServiceModel>).where((s) => s.isActive).toList();
+        _totalOrderCount = results[2] as int? ?? orders.length;
         _errorMessage = null;
         _isLoading = false;
       });
@@ -97,6 +90,29 @@ class _CustomerHomeScreenState extends State<CustomerHomeScreen> with WidgetsBin
         _errorMessage = OrderRepository.errorMessage(e);
         _isLoading = false;
       });
+    }
+  }
+
+  // muat ulang pesanan & jumlah total saja (dipakai Realtime & onResume agar hemat bandwidth)
+  Future<void> _loadOrdersOnly() async {
+    try {
+      final results = await Future.wait<Object?>([
+        OrderRepository.instance.fetchOrders(customerId: widget.customer.id),
+        OrderRepository.instance
+            .fetchCustomerOrderCount(widget.customer.id)
+            .then<int?>((c) => c)
+            .catchError((_) => null),
+      ]);
+      if (!mounted) return;
+      final orders = results[0] as List<OrderModel>;
+      setState(() {
+        _orders = orders;
+        _totalOrderCount = results[1] as int? ?? orders.length;
+        _errorMessage = null;
+        _isLoading = false;
+      });
+    } catch (e) {
+      debugPrint('Gagal memuat ulang pesanan: $e');
     }
   }
 
@@ -194,7 +210,7 @@ class _CustomerHomeScreenState extends State<CustomerHomeScreen> with WidgetsBin
           ? const Center(child: CircularProgressIndicator())
           // tab profil tidak perlu tarik untuk refresh
           : _currentIndex == 2
-              ? ProfileScreen(customer: widget.customer, orderCount: _orders.length)
+              ? ProfileScreen(customer: widget.customer, orderCount: _totalOrderCount ?? _orders.length)
               : RefreshIndicator(
                   onRefresh: _handleRefresh,
                   child: _errorMessage != null && _orders.isEmpty
@@ -326,7 +342,7 @@ class _CustomerHomeScreenState extends State<CustomerHomeScreen> with WidgetsBin
 
         const SizedBox(height: 12),
 
-        // daftar kartu pesanan aktif (ListView)
+        // daftar kartu pesanan aktif
         if (activeOrders.isEmpty)
           const EmptyStateView(message: 'Tidak ada cucian aktif saat ini.', icon: Icons.dry_cleaning_outlined)
         else
@@ -416,29 +432,34 @@ class _CustomerHomeScreenState extends State<CustomerHomeScreen> with WidgetsBin
     }
   }
 
-  // tab riwayat
+  // tab riwayat memakai ListView.builder agar ringan walau riwayat sudah banyak
   Widget _buildHistoryTab(List<OrderModel> pastOrders) {
     if (pastOrders.isEmpty) {
       // dibungkus ListView agar tetap bisa ditarik untuk refresh
       return ListView(
         physics: const AlwaysScrollableScrollPhysics(),
-        children: [
-          const EmptyStateView(message: 'Belum ada riwayat pesanan yang selesai.', icon: Icons.history_rounded),
+        children: const [
+          EmptyStateView(message: 'Belum ada riwayat pesanan yang selesai.', icon: Icons.history_rounded),
         ],
       );
     }
 
-    return ListView(
+    return ListView.builder(
       physics: const AlwaysScrollableScrollPhysics(),
       padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 16),
-      children: [
-        const Text(
-          'Riwayat Transaksi',
-          style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: Colors.black87),
-        ),
-        const SizedBox(height: 12),
-        ...pastOrders.map((order) => _buildModernOrderCard(order, isActive: false)),
-      ],
+      itemCount: pastOrders.length + 1,
+      itemBuilder: (context, index) {
+        if (index == 0) {
+          return const Padding(
+            padding: EdgeInsets.only(bottom: 12),
+            child: Text(
+              'Riwayat Transaksi',
+              style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: Colors.black87),
+            ),
+          );
+        }
+        return _buildModernOrderCard(pastOrders[index - 1], isActive: false);
+      },
     );
   }
 
@@ -463,9 +484,9 @@ class _CustomerHomeScreenState extends State<CustomerHomeScreen> with WidgetsBin
                 builder: (context) => OrderDetailScreen(order: order),
               ),
             );
-            // setelah kembali (pop) dari detail, muat ulang status terbaru
+            // setelah kembali (pop) dari detail, muat ulang pesanan terbaru
             if (mounted) {
-              _loadData();
+              _loadOrdersOnly();
             }
           },
           child: Padding(
@@ -517,7 +538,9 @@ class _CustomerHomeScreenState extends State<CustomerHomeScreen> with WidgetsBin
                           Text(
                             isActive
                                 ? '${order.formattedWeight} • Estimasi ${formatDayTime(order.estimatedCompletionAt)}'
-                                : '${order.formattedWeight} • Diambil ${formatDayTime(order.pickupTokenUsedAt!)}',
+                                : (order.pickupTokenUsedAt != null
+                                    ? '${order.formattedWeight} • Diambil ${formatDayTime(order.pickupTokenUsedAt!)}'
+                                    : '${order.formattedWeight} • Selesai'),
                             style: const TextStyle(fontSize: 12, color: Colors.grey),
                           ),
                         ],

@@ -5,8 +5,9 @@ import '../models/customer_model.dart';
 // error login / ganti password yang pesannya siap ditampilkan ke pengguna
 class AuthFailure implements Exception {
   final String message;
+  final String? code; // opsional: 'update_failed' untuk error saat simpan password baru
 
-  const AuthFailure(this.message);
+  const AuthFailure(this.message, {this.code});
 
   @override
   String toString() => message;
@@ -21,6 +22,19 @@ class AuthRepository {
 
   // Supabase Auth memakai email, jadi nomor HP diubah menjadi email internal
   static String emailFromPhone(String phone) => '${phone.trim()}@yalt.test';
+
+  // pulihkan sesi login tersimpan saat aplikasi dibuka ulang (null jika belum login)
+  Future<CustomerModel?> restoreSession() async {
+    final session = _client.auth.currentSession;
+    if (session == null) return null;
+    try {
+      return await _fetchProfile(session.user.id);
+    } catch (_) {
+      // sesi kedaluwarsa / profil terhapus: bersihkan sesi lokal dan arahkan ke login
+      await signOut();
+      return null;
+    }
+  }
 
   // POST /auth/v1/token?grant_type=password lalu GET /rest/v1/profiles
   Future<CustomerModel> signIn(String phone, String password) async {
@@ -54,9 +68,33 @@ class AuthRepository {
       if (e.code == 'invalid_credentials') {
         throw const AuthFailure('Password lama salah');
       }
-      rethrow;
+      throw AuthFailure('Verifikasi password gagal: ${e.message}', code: 'update_failed');
+    } on AuthException catch (_) {
+      throw const AuthFailure(
+        'Tidak dapat terhubung ke server. Periksa koneksi internet.',
+        code: 'update_failed',
+      );
     }
-    await _client.auth.updateUser(UserAttributes(password: newPassword));
+
+    try {
+      await _client.auth.updateUser(UserAttributes(password: newPassword));
+    } on AuthApiException catch (e) {
+      if (e.code == 'same_password') {
+        throw const AuthFailure('Password baru harus berbeda dari password lama', code: 'update_failed');
+      }
+      if (e.code == 'weak_password') {
+        throw const AuthFailure(
+          'Password terlalu lemah atau pernah bocor. Gunakan kombinasi lain.',
+          code: 'update_failed',
+        );
+      }
+      throw AuthFailure('Gagal mengubah password: ${e.message}', code: 'update_failed');
+    } on AuthException catch (_) {
+      throw const AuthFailure(
+        'Tidak dapat terhubung ke server. Periksa koneksi internet.',
+        code: 'update_failed',
+      );
+    }
   }
 
   Future<CustomerModel> _fetchProfile(String userId) async {

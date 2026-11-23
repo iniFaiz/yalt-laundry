@@ -24,10 +24,10 @@ class OrderEntryScreen extends StatefulWidget {
   const OrderEntryScreen({super.key});
 
   @override
-  State<OrderEntryScreen> createState() => _OrderEntryScreenState();
+  State<OrderEntryScreen> createState() => OrderEntryScreenState();
 }
 
-class _OrderEntryScreenState extends State<OrderEntryScreen> {
+class OrderEntryScreenState extends State<OrderEntryScreen> {
   List<CustomerModel> _customers = [];
   List<ServiceModel> _services = []; // hanya layanan aktif
   List<OrderModel> _recentOrders = [];
@@ -55,6 +55,9 @@ class _OrderEntryScreenState extends State<OrderEntryScreen> {
     super.dispose();
   }
 
+  // dipanggil saat admin kembali ke tab Kasir POS (segarkan data tanpa menghapus isian form)
+  Future<void> refreshReferenceData() => _loadData();
+
   // ambil pelanggan, layanan aktif, dan pesanan terbaru dari Supabase secara paralel
   Future<void> _loadData() async {
     try {
@@ -68,7 +71,8 @@ class _OrderEntryScreenState extends State<OrderEntryScreen> {
         _customers = results[0] as List<CustomerModel>;
         _services = (results[1] as List<ServiceModel>).where((s) => s.isActive).toList();
         _recentOrders = results[2] as List<OrderModel>;
-        // layanan yang sudah dinonaktifkan tidak bisa dipilih lagi
+        // pastikan pelanggan & layanan yang dipilih masih valid
+        if (!_customers.any((c) => c.id == _selectedCustomerId)) _selectedCustomerId = null;
         for (final item in _items) {
           if (!_services.any((s) => s.id == item.serviceId)) item.serviceId = null;
         }
@@ -164,18 +168,22 @@ class _OrderEntryScreenState extends State<OrderEntryScreen> {
     if (!mounted) return;
 
     // reset form input, pesanan baru muncul paling atas
+    final oldItems = List<_ItemRow>.of(_items);
     setState(() {
       _isSubmitting = false;
       _selectedCustomerId = null;
-      for (final item in _items) {
-        item.weightController.dispose();
-      }
       _items
         ..clear()
         ..add(_ItemRow());
       _recentOrders = [order, ..._recentOrders.take(9)];
     });
     _notesController.clear();
+    // dispose controller lama setelah frame selesai agar TextField tidak memegang controller mati
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      for (final item in oldItems) {
+        item.weightController.dispose();
+      }
+    });
 
     // feedback sukses ke admin, snackbar sebelumnya ditutup dulu agar tidak antre
     ScaffoldMessenger.of(context).hideCurrentSnackBar();
